@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx --yes create-next-app@latest _newhere_temp --typescript --tailwind --eslint --app --no-src-dir --turbopack --import-alias \"@/*\" --use-npm)",
+      "Bash(npx --yes create-next-app@latest newhere-temp --typescript --tailwind --eslint --app --no-src-dir --turbopack --import-alias \"@/*\" --use-npm)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"GET / -> %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"GET /onboarding -> %{http_code}\\\\n\" http://localhost:3000/onboarding)",
+      "Bash(curl -s -o /dev/null -w \"GET /plan -> %{http_code}\\\\n\" http://localhost:3000/plan)",
+      "Bash(npx tsx *)"
+    ]
+  }
+}
