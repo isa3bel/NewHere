@@ -11,7 +11,14 @@ export default async function SignInPage({
   const next = params.next ?? "/plan";
 
   return (
-    <main className="flex flex-1 items-center justify-center px-6">
+    <main className="flex flex-1 flex-col items-center justify-center px-6 py-8 relative">
+      <Link
+        href="/"
+        className="absolute top-6 left-6 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:underline"
+      >
+        ← Back
+      </Link>
+
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <p className="text-sm font-medium uppercase tracking-widest text-[var(--accent)] mb-2">

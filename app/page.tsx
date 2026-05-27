@@ -37,7 +37,7 @@ export default async function Home() {
             Get my plan
           </Link>
           <Link
-            href="/plan"
+            href="/sample"
             className="inline-flex h-12 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] px-7 text-base font-medium hover:bg-[var(--muted)] transition"
           >
             View sample plan
