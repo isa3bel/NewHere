@@ -1,6 +1,18 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+import { getCurrentUser } from "@/lib/auth";
+import { getProfile } from "@/lib/db";
+
+export default async function Home() {
+  const user = await getCurrentUser();
+  if (user) {
+    const profile = await getProfile(user.id);
+    if (profile) {
+      redirect("/plan");
+    }
+  }
+
   return (
     <main className="flex flex-col flex-1 items-center">
       <section className="w-full max-w-3xl px-6 pt-24 pb-16 sm:pt-32">
@@ -8,9 +20,9 @@ export default function Home() {
           NewHere
         </p>
         <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight leading-tight">
-          A 30-day plan for actually
+          A 7 / 30 / 90-day plan for
           <br />
-          building a life in your new city.
+          actually building a life in your new city.
         </h1>
         <p className="mt-6 text-lg sm:text-xl text-[var(--muted-foreground)] max-w-xl">
           Skip the overwhelm. Answer a few questions and we&apos;ll generate a
@@ -46,7 +58,7 @@ export default function Home() {
           <Step
             num="2"
             title="Get your plan"
-            body="A 30-day checklist of community, hobby, routine, and exploration actions."
+            body="Three phases — Week 1, Month 1, Quarter 1 — of community, hobby, routine, and exploration actions."
           />
           <Step
             num="3"

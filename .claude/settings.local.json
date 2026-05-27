@@ -9,7 +9,19 @@
       "Bash(curl -s -o /dev/null -w \"GET / -> %{http_code}\\\\n\" http://localhost:3000/)",
       "Bash(curl -s -o /dev/null -w \"GET /onboarding -> %{http_code}\\\\n\" http://localhost:3000/onboarding)",
       "Bash(curl -s -o /dev/null -w \"GET /plan -> %{http_code}\\\\n\" http://localhost:3000/plan)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(python -c \"import sys, json; d=json.load\\(sys.stdin\\); print\\('week_one:', len\\(d['weekOneActions']\\),'\\\\nmonth_one:', len\\(d['monthOneActions']\\),'\\\\nquarter_one:', len\\(d['quarterOneActions']\\)\\);print\\('phases on first 3 actions:', [a['phase'] for a in d['weekOneActions'][:3]]\\)\")",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',c=>s+=c\\).on\\('end',\\(\\)=>{const d=JSON.parse\\(s\\);console.log\\('week_one:',d.weekOneActions.length,'/ month_one:',d.monthOneActions.length,'/ quarter_one:',d.quarterOneActions.length\\);console.log\\('stretch:',d.stretchChallenge.title\\);}\\)\")",
+      "Bash(mkdir -p \"app/\\(app\\)\")",
+      "Bash(git mv *)",
+      "Bash(mv app/plan \"app/\\(app\\)/plan\")",
+      "Bash(curl -s -o /dev/null -w \"GET /for-you -> %{http_code}\\\\n\" http://localhost:3000/for-you)",
+      "Bash(curl -s -o /dev/null -w \"GET /for-you -> %{http_code}\\\\n\" \"http://localhost:3000/for-you\")",
+      "Bash(curl -s -o /dev/null -w \"GET /for-you?q=barre+fitness -> %{http_code}\\\\n\" \"http://localhost:3000/for-you?q=barre+fitness\")",
+      "Bash(curl -s -o /dev/null -w \"GET /for-you/loading-preview -> %{http_code}\\\\n\" http://localhost:3000/for-you/loading-preview)",
+      "Bash(curl -s -o /dev/null -w \"GET /profile -> %{http_code}\\\\n\" http://localhost:3000/profile)",
+      "Bash(curl -s -o /dev/null -w \"GET /profile?saved=1 -> %{http_code}\\\\n\" \"http://localhost:3000/profile?saved=1\")",
+      "Bash(del \"c:\\\\Users\\\\isabelbolger\\\\claude playground\\\\Moving tool\\\\app\\\\\\(app\\)\\\\for-you\\\\ForYouGrid.tsx\")"
     ]
   }
 }

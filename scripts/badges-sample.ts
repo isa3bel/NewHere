@@ -3,11 +3,12 @@ import { mockBadges, mockTasks } from "../lib/mock-data";
 import type { Task } from "../lib/types";
 
 function withCompleted(ids: string[]): Task[] {
-  return mockTasks.map((t) =>
-    ids.includes(t.id)
-      ? { ...t, status: "done", completedAt: new Date().toISOString() }
-      : t,
-  );
+  return mockTasks.map((t) => {
+    const base: Task = { keeperState: "none", ...t };
+    return ids.includes(t.id)
+      ? { ...base, status: "done", completedAt: new Date().toISOString() }
+      : base;
+  });
 }
 
 function scenario(label: string, completedIds: string[]) {
@@ -17,22 +18,20 @@ function scenario(label: string, completedIds: string[]) {
   console.log(`Earned: ${earned.map((b) => `${b.icon} ${b.name}`).join(", ") || "none"}`);
 }
 
-// 1 task → expect First Step only
-scenario("Complete 1 task", ["t1"]);
+// m1-climbing-gym = event_attendance; m1-coffee-regular + m1-grocery-routine = recurring
 
-// 1 event-attendance task → expect First Step + Showed Up
-scenario("Complete 1 event-attendance task (t4 = climbing gym)", ["t4"]);
+scenario("Complete 1 task", ["w1-license"]);
+scenario("Complete 1 event-attendance task (climbing gym)", ["m1-climbing-gym"]);
+scenario("Complete 3 tasks", ["w1-license", "w1-address", "w1-utilities"]);
+scenario("Complete 2 recurring tasks (coffee shop + grocery)", [
+  "m1-coffee-regular",
+  "m1-grocery-routine",
+]);
 
-// 3 tasks → expect First Step + Momentum
-scenario("Complete 3 tasks", ["t1", "t2", "t8"]);
-
-// 2 recurring → expect First Step + Momentum + Regular
-scenario(
-  "Complete 2 recurring tasks (t3 coffee shop, t6 grocery)",
-  ["t3", "t6"],
-);
-
-// 13 of 16 = 81% → expect everything including NewHere
-scenario("Complete 13 of 16 tasks (81%)", [
-  "t1","t2","t3","t4","t5","t6","t7","t8","t9","t10","t11","t12","t13",
+// 80% of 28 tasks = 22.4 -> need 23 done for NewHere
+scenario("Complete 23 of 28 tasks (82%)", [
+  "w1-license","w1-address","w1-utilities","w1-library","w1-health","w1-transit","w1-daily-shops","w1-home-safety",
+  "m1-coffee-regular","m1-grocery-routine","m1-climbing-gym","m1-meetup-rsvp","m1-run-club","m1-new-bookstore",
+  "m1-meetup-attend","m1-weekly-anchor","m1-new-cuisine","m1-invite","m1-beginner-class",
+  "q1-day-trip","q1-host","q1-multi-week-class","q1-new-hood",
 ]);

@@ -6,7 +6,7 @@ const out = generateRecommendations({
   socialGoals: ["close_friends", "community"],
   weeklyHours: 6,
   budgetTier: "medium",
-  socialEnergy: "medium",
+  socialStyle: "ambivert",
   availability: ["weekday_evenings", "weekends"],
 });
 

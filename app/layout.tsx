@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NewHere — Your 30-day plan for a new city",
+  title: "NewHere — Your 7/30/90-day plan for a new city",
   description:
-    "A personalized 30-day plan to help you find communities, hobbies, and routines after moving to a new city.",
+    "A personalized 7/30/90-day plan to help you find communities, hobbies, and routines after moving to a new city.",
 };
 
 export default function RootLayout({

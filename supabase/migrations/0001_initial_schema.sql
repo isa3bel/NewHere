@@ -13,10 +13,11 @@ create extension if not exists "pgcrypto";  -- gen_random_uuid()
 -- ------------------------------------------------------------
 -- Enums
 -- ------------------------------------------------------------
-create type social_energy as enum ('low', 'medium', 'high');
+create type social_style as enum ('introvert', 'ambivert', 'extrovert');
 create type budget_tier   as enum ('low', 'medium', 'high');
-create type task_category as enum ('community', 'hobby', 'routine', 'exploration');
+create type task_category as enum ('essentials', 'community', 'hobby', 'routine', 'exploration');
 create type task_status   as enum ('pending', 'done', 'snoozed', 'dismissed');
+create type task_phase    as enum ('week_one', 'month_one', 'quarter_one');
 
 -- ------------------------------------------------------------
 -- profiles — 1:1 with auth.users; holds onboarding answers
@@ -26,11 +27,11 @@ create table profiles (
   display_name  text,
   city          text not null,
   move_date     date not null,
-  social_energy social_energy not null default 'medium',
+  social_style  social_style  not null default 'ambivert',
   has_car       boolean       not null default false,
   budget_tier   budget_tier   not null default 'medium',
   interests     text[]        not null default '{}',
-  priorities    text[]        not null default '{}',
+  goals         text[]        not null default '{}',
   created_at    timestamptz   not null default now(),
   updated_at    timestamptz   not null default now()
 );
@@ -60,9 +61,10 @@ create table tasks (
   plan_id               uuid not null references plans(id) on delete cascade,
   user_id               uuid not null references auth.users(id) on delete cascade,
   category              task_category not null,
+  phase                 task_phase    not null,
   title                 text not null,
   description           text,
-  day_offset            int  not null check (day_offset between 0 and 29),
+  day_offset            int  not null check (day_offset between 0 and 89),
   link_url              text,
   status                task_status not null default 'pending',
   completed_at          timestamptz,
@@ -76,7 +78,7 @@ create table tasks (
 create index tasks_plan_id_idx        on tasks(plan_id);
 create index tasks_user_id_idx        on tasks(user_id);
 create index tasks_user_status_idx    on tasks(user_id, status);
-create index tasks_plan_day_order_idx on tasks(plan_id, day_offset, order_index);
+create index tasks_plan_phase_day_idx on tasks(plan_id, phase, day_offset, order_index);
 
 -- ------------------------------------------------------------
 -- badges — global catalog (reference data, admin-managed)

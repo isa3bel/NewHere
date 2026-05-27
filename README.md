@@ -1,6 +1,6 @@
 # NewHere
 
-A personalized 30-day plan for people moving to a new city — helps you find communities, hobbies, groups, and routines.
+A personalized 7/30/90-day plan for people moving to a new city — helps you find communities, hobbies, groups, and routines.
 
 See [PRD.md](PRD.md) for the product spec and [supabase/migrations/0001_initial_schema.sql](supabase/migrations/0001_initial_schema.sql) for the data model.
 
@@ -26,7 +26,7 @@ Open http://localhost:3000.
 app/                  Next.js pages and layouts
   page.tsx            Landing
   onboarding/         Quiz flow
-  plan/               30-day plan dashboard
+  plan/               7/30/90-day plan dashboard
 lib/
   types.ts            Shared TypeScript types
   mock-data.ts        Hardcoded sample data

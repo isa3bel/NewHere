@@ -1,7 +1,56 @@
-export type SocialEnergy = "low" | "medium" | "high";
+export type SocialStyle = "introvert" | "ambivert" | "extrovert";
 export type BudgetTier = "low" | "medium" | "high";
-export type TaskCategory = "community" | "hobby" | "routine" | "exploration";
+export type TaskCategory =
+  | "essentials"
+  | "community"
+  | "hobby"
+  | "routine"
+  | "exploration";
 export type TaskStatus = "pending" | "done" | "snoozed" | "dismissed";
+export type Phase = "week_one" | "month_one" | "quarter_one";
+
+// After a recurring or event task is marked done, the user picks whether
+// it sticks. `keep` promotes the task into "Your routine" (anchors).
+// `not_for_me` removes the task and any related items from future surfaces.
+// `none` is the default — the user hasn't decided yet.
+export type KeeperState = "none" | "keep" | "maybe" | "not_for_me";
+
+// Day-offset boundaries for each phase. `label` keeps the time anchor
+// ("Week 1"), `stage` is the behavioral framing ("Land & settle"). Both
+// are displayed: the stage tells the user where they are in the journey,
+// the label keeps the calendar legible.
+export const PHASE_RANGES: Record<
+  Phase,
+  { start: number; end: number; label: string; stage: string; stageBlurb: string }
+> = {
+  week_one: {
+    start: 0,
+    end: 6,
+    label: "Week 1",
+    stage: "Land & settle",
+    stageBlurb: "Get the basics in place so the rest of life can happen.",
+  },
+  month_one: {
+    start: 7,
+    end: 29,
+    label: "Month 1",
+    stage: "Try things",
+    stageBlurb: "Explore widely. You're collecting data, not making commitments.",
+  },
+  quarter_one: {
+    start: 30,
+    end: 89,
+    label: "Quarter 1",
+    stage: "Build your routine",
+    stageBlurb: "Double down on what stuck. Drop what didn't.",
+  },
+};
+
+export function phaseForDay(dayOffset: number): Phase {
+  if (dayOffset <= PHASE_RANGES.week_one.end) return "week_one";
+  if (dayOffset <= PHASE_RANGES.month_one.end) return "month_one";
+  return "quarter_one";
+}
 
 export type SocialGoal =
   | "close_friends"
@@ -21,11 +70,11 @@ export type Profile = {
   displayName: string | null;
   city: string;
   moveDate: string;
-  socialEnergy: SocialEnergy;
+  socialStyle: SocialStyle;
   hasCar: boolean;
   budgetTier: BudgetTier;
   interests: string[];
-  priorities: string[];
+  goals: string[];
 };
 
 export type Plan = {
@@ -41,6 +90,7 @@ export type Task = {
   planId: string;
   userId: string;
   category: TaskCategory;
+  phase: Phase;
   title: string;
   description: string | null;
   dayOffset: number;
@@ -50,6 +100,7 @@ export type Task = {
   orderIndex: number;
   isEventAttendance: boolean;
   isRecurringActivity: boolean;
+  keeperState: KeeperState;
 };
 
 export type BadgeCriteria =
@@ -72,6 +123,12 @@ export type UserBadge = {
   badgeId: string;
   earnedAt: string;
 };
+
+// State of a For You item the user has pinned. `shortlist` is the default
+// (parked for later), `going` is the active commitment (event tiles), `went`
+// is the archive. Non-event tiles really only use `shortlist`; events use
+// the full lifecycle.
+export type SavedItemState = "shortlist" | "going" | "went";
 
 export const INTEREST_TAGS = [
   "fitness",
@@ -96,11 +153,15 @@ export const INTEREST_TAGS = [
   "nightlife",
 ] as const;
 
-export const PRIORITY_TAGS = [
-  "community",
-  "fitness",
-  "creative",
-  "professional",
-  "spiritual",
-  "volunteer",
+// High-level goals shown on the onboarding form. Stored on the profile as
+// strings and read by the recommendation engine to steer suggestions.
+export const GOAL_TAGS = [
+  "Make new friends",
+  "Find a community",
+  "Grow professionally",
+  "Explore the city",
+  "Build healthy habits",
+  "Pursue a hobby or creative passion",
+  "Date and meet new people",
+  "Give back / volunteer",
 ] as const;

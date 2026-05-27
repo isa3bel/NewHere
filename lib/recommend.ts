@@ -1,8 +1,9 @@
 import type {
   Availability,
   BudgetTier,
-  SocialEnergy,
+  Phase,
   SocialGoal,
+  SocialStyle,
   TaskCategory,
 } from "./types";
 
@@ -16,7 +17,7 @@ export type RecommendationInput = {
   socialGoals: SocialGoal[];
   weeklyHours: number;
   budgetTier: BudgetTier;
-  socialEnergy: SocialEnergy;
+  socialStyle: SocialStyle;
   availability: Availability[];
 };
 
@@ -25,6 +26,7 @@ export type RecommendedAction = {
   title: string;
   description: string;
   category: TaskCategory;
+  phase: Phase;
   estMinutes: number;
   costTier: BudgetTier;
   linkUrl?: string;
@@ -47,8 +49,10 @@ export type SearchPhrase = {
 
 export type Recommendations = {
   city: string;
-  firstWeekActions: RecommendedAction[];
-  thirtyDayActions: RecommendedAction[];
+  // Three phases — see PRD acceptance criterion #2
+  weekOneActions: RecommendedAction[];      // >= 5, days 0-6
+  monthOneActions: RecommendedAction[];     // >= 8, days 7-29
+  quarterOneActions: RecommendedAction[];   // >= 8, days 30-89
   weeklyRoutine: {
     title: string;
     description: string;
@@ -79,15 +83,24 @@ type Template = {
   tags: TemplateTag[];
   estMinutes: number;
   costTier: BudgetTier;
+  // Phase the template fits best in. If omitted, derived from tags:
+  // "first_week" tag -> week_one, otherwise month_one.
+  phase?: Phase;
   // Eligibility — all defined fields must pass
   requiresAnyInterest?: string[];
   requiresAnyGoal?: SocialGoal[];
-  minEnergy?: SocialEnergy;       // user energy must be >= this
+  minStyle?: SocialStyle;       // user style must be at least this outgoing
   maxCostForBudget?: BudgetTier;  // template cost must be <= user budget
   linkTemplate?: string;          // {{interest}} and {{city}} substituted
   // Scoring boost
   baseScore: number;
 };
+
+function phaseFor(t: Template): Phase {
+  if (t.phase) return t.phase;
+  if (t.tags.includes("first_week")) return "week_one";
+  return "month_one";
+}
 
 const TEMPLATES: Template[] = [
   // -------- First-week anchors (no social commitment) --------
@@ -248,12 +261,13 @@ const TEMPLATES: Template[] = [
   },
   {
     id: "art_class",
-    title: "Sign up for a one-off art or pottery class",
-    description: "Classes give you both a skill and a fresh group of people to meet.",
+    title: "Commit to a multi-week art or pottery class",
+    description: "Classes give you both a skill and a fresh recurring group of people.",
     category: "hobby",
     tags: ["social", "active"],
     estMinutes: 120,
     costTier: "medium",
+    phase: "quarter_one",
     requiresAnyInterest: ["art"],
     baseScore: 6,
   },
@@ -265,6 +279,7 @@ const TEMPLATES: Template[] = [
     tags: ["social", "active"],
     estMinutes: 150,
     costTier: "medium",
+    phase: "quarter_one",
     requiresAnyInterest: ["cooking", "food"],
     baseScore: 6,
   },
@@ -293,12 +308,13 @@ const TEMPLATES: Template[] = [
   },
   {
     id: "dance_class",
-    title: "Try a beginner dance class",
-    description: "Salsa, swing, contra — most beginner classes don't require a partner.",
+    title: "Take a beginner dance class series",
+    description: "Salsa, swing, contra — most beginner series don't require a partner. Commit to 4 weeks.",
     category: "hobby",
     tags: ["social", "active"],
     estMinutes: 90,
     costTier: "medium",
+    phase: "quarter_one",
     requiresAnyInterest: ["dance"],
     baseScore: 6,
   },
@@ -336,6 +352,7 @@ const TEMPLATES: Template[] = [
     tags: ["social"],
     estMinutes: 120,
     costTier: "low",
+    phase: "quarter_one",
     requiresAnyGoal: ["close_friends", "community"],
     baseScore: 8,
   },
@@ -357,6 +374,7 @@ const TEMPLATES: Template[] = [
     tags: ["social"],
     estMinutes: 90,
     costTier: "low",
+    phase: "quarter_one",
     requiresAnyGoal: ["close_friends", "dating"],
     baseScore: 7,
   },
@@ -403,6 +421,7 @@ const TEMPLATES: Template[] = [
     tags: ["social", "active", "anchor"],
     estMinutes: 120,
     costTier: "medium",
+    phase: "quarter_one",
     requiresAnyInterest: ["fitness", "running", "cycling"],
     requiresAnyGoal: ["close_friends", "acquaintances", "community"],
     baseScore: 7,
@@ -427,6 +446,7 @@ const TEMPLATES: Template[] = [
     tags: [],
     estMinutes: 360,
     costTier: "medium",
+    phase: "quarter_one",
     baseScore: 5,
   },
   {
@@ -467,7 +487,67 @@ const TEMPLATES: Template[] = [
     tags: ["anchor"],
     estMinutes: 30,
     costTier: "low",
+    phase: "quarter_one",
     baseScore: 6,
+  },
+
+  // -------- Additional Quarter 1 templates (deeper commitment) --------
+  {
+    id: "host_gathering",
+    title: "Host a small gathering of 3–5 people you've met",
+    description: "Coffee, board games, a walk — low-stakes format. The host role gives you a reason to invite people you've only met once.",
+    category: "community",
+    tags: ["social"],
+    estMinutes: 180,
+    costTier: "medium",
+    phase: "quarter_one",
+    requiresAnyGoal: ["close_friends", "community"],
+    baseScore: 7,
+  },
+  {
+    id: "third_place",
+    title: "Identify your 'third place' — somewhere weekly that isn't home or work",
+    description: "Library, gym, or coffee shop you visit every week. By month 3, the staff should know your face.",
+    category: "routine",
+    tags: ["anchor"],
+    estMinutes: 60,
+    costTier: "low",
+    phase: "quarter_one",
+    baseScore: 7,
+  },
+  {
+    id: "weekend_trip",
+    title: "Take a weekend trip to somewhere within 3 hours",
+    description: "Get out of the city for two days. You'll come back understanding home better.",
+    category: "exploration",
+    tags: [],
+    estMinutes: 1800,
+    costTier: "medium",
+    phase: "quarter_one",
+    baseScore: 5,
+  },
+  {
+    id: "new_neighborhood_visit",
+    title: "Visit a neighborhood you've never been to",
+    description: "Eat lunch there. Walk for an hour. Notice what's different from your own.",
+    category: "exploration",
+    tags: [],
+    estMinutes: 180,
+    costTier: "low",
+    phase: "quarter_one",
+    baseScore: 5,
+  },
+  {
+    id: "regular_partner",
+    title: "Find a regular running, hiking, or workout partner",
+    description: "Someone who'll text you when they're going — accountability turns intent into habit.",
+    category: "hobby",
+    tags: ["social", "active", "anchor"],
+    estMinutes: 90,
+    costTier: "low",
+    phase: "quarter_one",
+    requiresAnyInterest: ["running", "fitness", "hiking", "cycling", "yoga"],
+    baseScore: 7,
   },
 ];
 
@@ -475,7 +555,12 @@ const TEMPLATES: Template[] = [
 // Scoring + selection
 // ============================================================
 
-const ENERGY_ORDER: Record<SocialEnergy, number> = { low: 0, medium: 1, high: 2 };
+// 0 = most introverted, 2 = most extroverted
+const STYLE_ORDER: Record<SocialStyle, number> = {
+  introvert: 0,
+  ambivert: 1,
+  extrovert: 2,
+};
 const BUDGET_ORDER: Record<BudgetTier, number> = { low: 0, medium: 1, high: 2 };
 
 function isEligible(t: Template, input: RecommendationInput): boolean {
@@ -492,8 +577,8 @@ function isEligible(t: Template, input: RecommendationInput): boolean {
     return false;
   }
   if (
-    t.minEnergy &&
-    ENERGY_ORDER[input.socialEnergy] < ENERGY_ORDER[t.minEnergy]
+    t.minStyle &&
+    STYLE_ORDER[input.socialStyle] < STYLE_ORDER[t.minStyle]
   ) {
     return false;
   }
@@ -521,12 +606,13 @@ function fitScore(t: Template, input: RecommendationInput): number {
     score += matches * 2;
   }
 
-  // Energy alignment: introverts get a bonus on non-social actions; extroverts on social
-  const energyN = ENERGY_ORDER[input.socialEnergy];
+  // Style alignment: introverts get a bonus on solo/individual actions;
+  // extroverts get a bonus on social ones. Ambiverts sit in the middle.
+  const styleN = STYLE_ORDER[input.socialStyle];
   if (t.tags.includes("social")) {
-    score += energyN === 2 ? 3 : energyN === 1 ? 1 : -2;
+    score += styleN === 2 ? 3 : styleN === 1 ? 1 : -2;
   } else {
-    score += energyN === 0 ? 2 : energyN === 1 ? 1 : 0;
+    score += styleN === 0 ? 2 : styleN === 1 ? 1 : 0;
   }
 
   // Weekly time fit: penalize templates that exceed weekly time budget
@@ -563,6 +649,7 @@ function renderTemplate(
     title: t.title,
     description: t.description,
     category: t.category,
+    phase: phaseFor(t),
     estMinutes: t.estMinutes,
     costTier: t.costTier,
     linkUrl,
@@ -620,14 +707,14 @@ function pickWeeklyRoutine(input: RecommendationInput): Recommendations["weeklyR
 function pickStretchChallenge(
   input: RecommendationInput,
 ): Recommendations["stretchChallenge"] {
-  const energy = ENERGY_ORDER[input.socialEnergy];
-  if (energy >= 2) {
+  const style = STYLE_ORDER[input.socialStyle];
+  if (style >= 2) {
     return {
       title: "Host a small gathering of 4 new acquaintances",
       description: "Pick a low-stakes format — coffee, board games, a walk. The host role gives you a reason to invite people you've only met once.",
     };
   }
-  if (energy === 1) {
+  if (style === 1) {
     return {
       title: "Say yes to every invitation for one full week",
       description: "Even the awkward ones. The point isn't fun — it's resetting your default response and building social momentum.",
@@ -743,60 +830,99 @@ function pickSearchPhrases(input: RecommendationInput): SearchPhrase[] {
 // Main entry point
 // ============================================================
 
-export function generateRecommendations(
+// Minimums from PRD acceptance criterion #2
+const PHASE_TARGETS: Record<Phase, number> = {
+  week_one: 5,
+  month_one: 8,
+  quarter_one: 8,
+};
+
+type Scored = { t: Template; score: number };
+
+function pickForPhase(
+  phase: Phase,
+  primaryPool: Scored[],
+  spilloverPool: Scored[],
+  alreadyPicked: Set<string>,
   input: RecommendationInput,
-): Recommendations {
-  const eligible = TEMPLATES.filter((t) => isEligible(t, input));
-  const scored = eligible
-    .map((t) => ({ t, score: fitScore(t, input) }))
-    .sort((a, b) => b.score - a.score);
-
-  // First-week picks: prefer tagged "first_week", fall back to top by score
-  const firstWeekPool = scored.filter(({ t }) => t.tags.includes("first_week"));
-  const firstWeekIds = new Set<string>();
-  const firstWeekActions: RecommendedAction[] = [];
-  for (const { t } of firstWeekPool) {
-    if (firstWeekActions.length >= 3) break;
-    firstWeekActions.push(renderTemplate(t, input));
-    firstWeekIds.add(t.id);
-  }
-  for (const { t } of scored) {
-    if (firstWeekActions.length >= 3) break;
-    if (firstWeekIds.has(t.id)) continue;
-    firstWeekActions.push(renderTemplate(t, input));
-    firstWeekIds.add(t.id);
-  }
-
-  // 30-day picks: top 10 by score, excluding first-week picks; ensure category diversity
-  const thirtyDayActions: RecommendedAction[] = [];
+): RecommendedAction[] {
+  const target = PHASE_TARGETS[phase];
+  const picks: RecommendedAction[] = [];
+  // Soft cap of ~half the target per category to keep diversity
+  const cap = Math.max(2, Math.ceil(target / 2));
   const categoryCounts: Record<TaskCategory, number> = {
+    essentials: 0,
     community: 0,
     hobby: 0,
     routine: 0,
     exploration: 0,
   };
-  for (const { t } of scored) {
-    if (thirtyDayActions.length >= 10) break;
-    if (firstWeekIds.has(t.id)) continue;
-    // Soft-cap any single category at 4 of 10
-    if (categoryCounts[t.category] >= 4) continue;
-    thirtyDayActions.push(renderTemplate(t, input));
-    categoryCounts[t.category] += 1;
-  }
-  // If diversity cap left us short, top-up without the cap
-  if (thirtyDayActions.length < 10) {
-    const have = new Set(thirtyDayActions.map((a) => a.id));
-    for (const { t } of scored) {
-      if (thirtyDayActions.length >= 10) break;
-      if (firstWeekIds.has(t.id) || have.has(t.id)) continue;
-      thirtyDayActions.push(renderTemplate(t, input));
-    }
-  }
+
+  const tryAdd = (s: Scored, respectCategoryCap: boolean) => {
+    if (picks.length >= target) return;
+    if (alreadyPicked.has(s.t.id)) return;
+    if (respectCategoryCap && categoryCounts[s.t.category] >= cap) return;
+    picks.push(renderTemplate(s.t, input));
+    alreadyPicked.add(s.t.id);
+    categoryCounts[s.t.category] += 1;
+  };
+
+  for (const s of primaryPool) tryAdd(s, true);
+  // If the primary pool didn't fill the target, drop the diversity cap
+  for (const s of primaryPool) tryAdd(s, false);
+  // Still short? spill over from adjacent phases (only if we genuinely can't hit the minimum)
+  for (const s of spilloverPool) tryAdd(s, false);
+
+  return picks;
+}
+
+export function generateRecommendations(
+  input: RecommendationInput,
+): Recommendations {
+  const eligible = TEMPLATES.filter((t) => isEligible(t, input));
+  const scored: Scored[] = eligible
+    .map((t) => ({ t, score: fitScore(t, input) }))
+    .sort((a, b) => b.score - a.score);
+
+  const buckets: Record<Phase, Scored[]> = {
+    week_one: [],
+    month_one: [],
+    quarter_one: [],
+  };
+  for (const s of scored) buckets[phaseFor(s.t)].push(s);
+
+  const picked = new Set<string>();
+
+  // Pick in order so each phase prefers its own pool first.
+  // Spillover order: week_one borrows from month_one if short; month_one and
+  // quarter_one borrow from each other.
+  const weekOneActions = pickForPhase(
+    "week_one",
+    buckets.week_one,
+    buckets.month_one,
+    picked,
+    input,
+  );
+  const monthOneActions = pickForPhase(
+    "month_one",
+    buckets.month_one,
+    buckets.quarter_one,
+    picked,
+    input,
+  );
+  const quarterOneActions = pickForPhase(
+    "quarter_one",
+    buckets.quarter_one,
+    buckets.month_one,
+    picked,
+    input,
+  );
 
   return {
     city: input.city,
-    firstWeekActions,
-    thirtyDayActions,
+    weekOneActions,
+    monthOneActions,
+    quarterOneActions,
     weeklyRoutine: pickWeeklyRoutine(input),
     stretchChallenge: pickStretchChallenge(input),
     searchPhrases: pickSearchPhrases(input),
