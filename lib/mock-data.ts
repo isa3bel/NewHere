@@ -24,9 +24,9 @@ export const mockPlan: Plan = {
 
 // 7/30/90 plan: 8 Week 1 essentials, 11 Month 1, 9 Quarter 1 (28 total)
 // Meets PRD acceptance criterion: ≥5 / ≥8 / ≥8
-// keeperState is defaulted in db.createStore() so the seed data doesn't
-// need to repeat it on every entry.
-export const mockTasks: Omit<Task, "keeperState">[] = [
+// keeperState + sourceItemId are defaulted at insert time so the seed
+// data doesn't need to repeat them on every entry.
+export const mockTasks: Omit<Task, "keeperState" | "sourceItemId">[] = [
   // -------- Week 1 (days 0–6): administrative + setup essentials --------
   {
     id: "w1-license",

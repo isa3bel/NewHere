@@ -8,24 +8,22 @@ import { requireUser } from "@/lib/auth";
 import { CELEBRATION_COOKIE } from "@/lib/celebration";
 import {
   createTaskFromForYou,
+  ensurePlanForUser,
   getActivePlan,
   getProfile,
-  getSavedItems,
   resetPlanProgress,
-  saveForYouItem,
-  setSavedItemState,
   setTaskKeeperState,
   toggleTaskAndAwardBadges,
-  unsaveForYouItem,
   upsertProfile,
 } from "@/lib/db";
 import type { ForYouItem } from "@/lib/for-you-data";
 import { daysSinceMove } from "@/lib/plan-progress";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   BudgetTier,
   KeeperState,
   Profile,
-  SavedItemState,
   SocialStyle,
   TaskStatus,
 } from "@/lib/types";
@@ -47,6 +45,7 @@ function readProfileFromForm(userId: string, formData: FormData): Profile {
 export async function saveOnboardingAction(formData: FormData) {
   const user = await requireUser();
   await upsertProfile(readProfileFromForm(user.id, formData));
+  await ensurePlanForUser(user.id);
   await resetPlanProgress(user.id);
   redirect("/plan");
 }
@@ -88,7 +87,6 @@ export async function setKeeperStateAction(args: {
   await requireUser();
   await setTaskKeeperState(args.taskId, args.state);
   revalidatePath("/plan");
-  revalidatePath("/for-you");
 }
 
 export async function dismissCelebrationAction() {
@@ -97,55 +95,40 @@ export async function dismissCelebrationAction() {
   revalidatePath("/plan");
 }
 
-// --- For You: save / shortlist actions ---------------------------------
-
-export async function toggleSaveForYouAction(args: {
-  item: ForYouItem;
-  interest: string;
-  currentlySaved: boolean;
-}) {
+// Permanently delete the signed-in user and all their data. The auth.users
+// row deletion cascades through profiles → plans → tasks → user_badges via
+// `on delete cascade` foreign keys in the schema.
+export async function deleteAccountAction() {
   const user = await requireUser();
-  if (args.currentlySaved) {
-    await unsaveForYouItem(user.id, args.item.id);
-  } else {
-    await saveForYouItem(user.id, args.item, args.interest, "shortlist");
+
+  const admin = createSupabaseAdminClient();
+  const { error: deleteErr } = await admin.auth.admin.deleteUser(user.id);
+  if (deleteErr) {
+    throw new Error(`Failed to delete account: ${deleteErr.message}`);
   }
-  revalidatePath("/for-you");
-  revalidatePath("/plan");
+
+  // Clear the now-stale session cookie.
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
+
+  redirect("/");
 }
 
-export async function setSavedStateAction(args: {
-  forYouItemId: string;
-  state: SavedItemState;
-}) {
-  const user = await requireUser();
-  await setSavedItemState(user.id, args.forYouItemId, args.state);
-  revalidatePath("/for-you");
-}
-
+// "+ Add to my plan" on a pre-move recommendation. Creates a task in the
+// user's plan from the For You item; idempotent if clicked twice.
 export async function addForYouToPlanAction(args: {
   item: ForYouItem;
   interest: string;
 }) {
   const user = await requireUser();
-  const [profile, plan, existingSaved] = await Promise.all([
+  const [profile, plan] = await Promise.all([
     getProfile(user.id),
     getActivePlan(user.id),
-    getSavedItems(user.id),
   ]);
   if (!plan) return;
 
   const currentDay = profile?.moveDate ? daysSinceMove(profile.moveDate) : 0;
   await createTaskFromForYou(user.id, plan.id, args.item, currentDay);
 
-  // Make sure the source is saved so it appears in the shortlist. Preserve
-  // whatever state it's already in — Going is for events the user explicitly
-  // committed to, not the default for everything added to the plan.
-  const already = existingSaved.find((s) => s.forYouItemId === args.item.id);
-  if (!already) {
-    await saveForYouItem(user.id, args.item, args.interest, "shortlist");
-  }
-
-  revalidatePath("/for-you");
   revalidatePath("/plan");
 }

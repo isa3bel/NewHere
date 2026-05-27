@@ -5,6 +5,8 @@ import { ProfileForm } from "@/app/_components/ProfileForm";
 import { requireUser } from "@/lib/auth";
 import { getProfile } from "@/lib/db";
 
+import { DeleteAccountSection } from "./DeleteAccountSection";
+
 export default async function ProfilePage({
   searchParams,
 }: {
@@ -43,6 +45,8 @@ export default async function ProfilePage({
             submitLabel={isNew ? "Save profile" : "Save changes"}
           />
         </div>
+
+        {!isNew && <DeleteAccountSection />}
       </div>
     </main>
   );

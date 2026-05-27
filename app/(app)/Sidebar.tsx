@@ -51,7 +51,19 @@ export function Sidebar() {
           </ul>
         </nav>
 
-        <div className="px-6 py-4 text-xs text-[var(--muted-foreground)]">
+        <div className="px-3 pb-4">
+          <form action="/auth/sign-out" method="post">
+            <button
+              type="submit"
+              className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition"
+            >
+              <span aria-hidden>↩</span>
+              <span>Sign out</span>
+            </button>
+          </form>
+        </div>
+
+        <div className="px-6 pb-4 text-xs text-[var(--muted-foreground)]">
           Demo build · v0.1
         </div>
       </div>

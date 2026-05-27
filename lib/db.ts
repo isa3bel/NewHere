@@ -1,246 +1,376 @@
 import { evaluateBadges } from "./badges";
 import type { ForYouItem } from "./for-you-data";
-import {
-  mockBadges,
-  mockPlan,
-  mockTasks,
-  mockUserBadges,
-} from "./mock-data";
-import type { SavedItem } from "./saved-items";
+import { mockTasks } from "./mock-data";
+import { createSupabaseAdminClient } from "./supabase/admin";
+import { createSupabaseServerClient } from "./supabase/server";
 import { phaseForDay } from "./types";
 import type {
   Badge,
+  BadgeCriteria,
   KeeperState,
   Plan,
   Profile,
-  SavedItemState,
   Task,
   TaskCategory,
   TaskStatus,
   UserBadge,
 } from "./types";
 
-// In-memory store. Profile starts empty so new visitors see a blank
-// onboarding form. (mockProfile is exported from mock-data.ts as a
-// reference shape.) When Supabase is wired up, replace each function body
-// with real queries.
-//
-// The store is stashed on globalThis so that Next.js dev-mode HMR (which
-// reloads modules whenever any imported file changes) doesn't wipe state
-// the user has entered. Without this, your profile disappears every time
-// the assistant edits a file during development.
-type Store = {
-  profiles: Map<string, Profile>;
-  plans: Map<string, Plan>;
-  tasks: Map<string, Task>;
-  badges: Badge[];
-  userBadges: UserBadge[];
-  savedItems: SavedItem[];
+// ============================================================
+// Row → domain-object conversions (snake_case DB → camelCase TS)
+// ============================================================
+
+type ProfileRow = {
+  user_id: string;
+  display_name: string | null;
+  city: string;
+  move_date: string;
+  social_style: Profile["socialStyle"];
+  has_car: boolean;
+  budget_tier: Profile["budgetTier"];
+  interests: string[] | null;
+  goals: string[] | null;
 };
 
-function createStore(): Store {
+type PlanRow = {
+  id: string;
+  user_id: string;
+  version: number;
+  is_active: boolean;
+  generated_at: string;
+};
+
+type TaskRow = {
+  id: string;
+  plan_id: string;
+  user_id: string;
+  category: TaskCategory;
+  phase: Task["phase"];
+  title: string;
+  description: string | null;
+  day_offset: number;
+  link_url: string | null;
+  status: TaskStatus;
+  completed_at: string | null;
+  order_index: number;
+  is_event_attendance: boolean;
+  is_recurring_activity: boolean;
+  keeper_state: KeeperState;
+  source_item_id: string | null;
+};
+
+type BadgeRow = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon: string | null;
+  criteria: BadgeCriteria;
+};
+
+type UserBadgeRow = {
+  user_id: string;
+  badge_id: string;
+  earned_at: string;
+};
+
+function rowToProfile(r: ProfileRow): Profile {
   return {
-    profiles: new Map(),
-    plans: new Map([[mockPlan.id, mockPlan]]),
-    tasks: new Map(
-      mockTasks.map((t) => [
-        t.id,
-        // Default keeperState so mock-data doesn't have to set it on every entry.
-        { keeperState: "none" as const, ...t },
-      ]),
-    ),
-    badges: [...mockBadges],
-    userBadges: [...mockUserBadges],
-    savedItems: [],
+    userId: r.user_id,
+    displayName: r.display_name,
+    city: r.city,
+    moveDate: r.move_date,
+    socialStyle: r.social_style,
+    hasCar: r.has_car,
+    budgetTier: r.budget_tier,
+    interests: r.interests ?? [],
+    goals: r.goals ?? [],
   };
 }
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __newhereDevStore: Store | undefined;
+function rowToPlan(r: PlanRow): Plan {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    version: r.version,
+    isActive: r.is_active,
+    generatedAt: r.generated_at,
+  };
 }
 
-// Pick up the existing dev store if one is stashed from a prior HMR cycle,
-// then backfill any fields that didn't exist when it was first created.
-// Without this, adding a new collection (e.g. `savedItems`) crashes the
-// app until the dev server is restarted.
-function ensureStore(): Store {
-  const fresh = createStore();
-  const existing = globalThis.__newhereDevStore;
-  if (!existing) return fresh;
-  for (const key of Object.keys(fresh) as (keyof Store)[]) {
-    if (existing[key] === undefined) {
-      // @ts-expect-error — assigning per-key to backfill missing collections
-      existing[key] = fresh[key];
-    }
-  }
-  // Backfill missing fields on tasks (e.g. keeperState added later).
-  for (const [id, task] of existing.tasks) {
-    if ((task as unknown as Record<string, unknown>).keeperState === undefined) {
-      existing.tasks.set(id, { ...task, keeperState: "none" });
-    }
-  }
-  return existing;
+function rowToTask(r: TaskRow): Task {
+  return {
+    id: r.id,
+    planId: r.plan_id,
+    userId: r.user_id,
+    category: r.category,
+    phase: r.phase,
+    title: r.title,
+    description: r.description,
+    dayOffset: r.day_offset,
+    linkUrl: r.link_url,
+    status: r.status,
+    completedAt: r.completed_at,
+    orderIndex: r.order_index,
+    isEventAttendance: r.is_event_attendance,
+    isRecurringActivity: r.is_recurring_activity,
+    keeperState: r.keeper_state,
+    sourceItemId: r.source_item_id,
+  };
 }
 
-const store: Store = ensureStore();
-globalThis.__newhereDevStore = store;
+function rowToBadge(r: BadgeRow): Badge {
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    description: r.description,
+    icon: r.icon,
+    criteria: r.criteria,
+  };
+}
+
+// ============================================================
+// Profiles
+// ============================================================
 
 export async function getProfile(userId: string): Promise<Profile | null> {
-  return store.profiles.get(userId) ?? null;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToProfile(data as ProfileRow);
 }
 
 export async function upsertProfile(profile: Profile): Promise<Profile> {
-  store.profiles.set(profile.userId, profile);
-  return profile;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert({
+      user_id: profile.userId,
+      display_name: profile.displayName,
+      city: profile.city,
+      move_date: profile.moveDate,
+      social_style: profile.socialStyle,
+      has_car: profile.hasCar,
+      budget_tier: profile.budgetTier,
+      interests: profile.interests,
+      goals: profile.goals,
+    })
+    .select()
+    .single();
+  if (error || !data) {
+    throw new Error(`upsertProfile failed: ${error?.message ?? "no data"}`);
+  }
+  return rowToProfile(data as ProfileRow);
 }
+
+// ============================================================
+// Plans
+// ============================================================
 
 export async function getActivePlan(userId: string): Promise<Plan | null> {
-  for (const plan of store.plans.values()) {
-    if (plan.userId === userId && plan.isActive) return plan;
-  }
-  return null;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("plans")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToPlan(data as PlanRow);
 }
+
+// Ensure the user has an active plan + the 28 starter tasks. Idempotent.
+// Called on every onboarding so a brand-new user gets their own copy of
+// the starter plan.
+export async function ensurePlanForUser(userId: string): Promise<Plan> {
+  const existing = await getActivePlan(userId);
+  if (existing) return existing;
+
+  const supabase = await createSupabaseServerClient();
+
+  // 1) Create the plan
+  const { data: planData, error: planErr } = await supabase
+    .from("plans")
+    .insert({ user_id: userId, version: 1, is_active: true })
+    .select()
+    .single();
+  if (planErr || !planData) {
+    throw new Error(`ensurePlanForUser plan failed: ${planErr?.message}`);
+  }
+  const plan = rowToPlan(planData as PlanRow);
+
+  // 2) Bulk insert 28 starter tasks
+  const taskRows = mockTasks.map((mt) => ({
+    plan_id: plan.id,
+    user_id: userId,
+    category: mt.category,
+    phase: mt.phase,
+    title: mt.title,
+    description: mt.description,
+    day_offset: mt.dayOffset,
+    link_url: mt.linkUrl,
+    status: "pending" as TaskStatus,
+    order_index: mt.orderIndex,
+    is_event_attendance: mt.isEventAttendance,
+    is_recurring_activity: mt.isRecurringActivity,
+  }));
+  const { error: tasksErr } = await supabase.from("tasks").insert(taskRows);
+  if (tasksErr) {
+    throw new Error(`ensurePlanForUser tasks failed: ${tasksErr.message}`);
+  }
+
+  return plan;
+}
+
+// ============================================================
+// Tasks
+// ============================================================
 
 export async function getTasksForPlan(planId: string): Promise<Task[]> {
-  dedupeCustomTasksForPlan(planId);
-  return [...store.tasks.values()]
-    .filter((t) => t.planId === planId)
-    .sort((a, b) => a.dayOffset - b.dayOffset || a.orderIndex - b.orderIndex);
-}
-
-// Self-heal duplicate custom tasks left over from earlier builds where
-// "Add to my plan" used a non-deterministic id. Groups custom tasks by
-// title and keeps one — preferring the new deterministic id, otherwise
-// the most recently created.
-function dedupeCustomTasksForPlan(planId: string): void {
-  const byTitle = new Map<string, Task[]>();
-  for (const task of store.tasks.values()) {
-    if (task.planId !== planId) continue;
-    if (!task.id.startsWith("custom-")) continue;
-    const bucket = byTitle.get(task.title) ?? [];
-    bucket.push(task);
-    byTitle.set(task.title, bucket);
-  }
-  for (const bucket of byTitle.values()) {
-    if (bucket.length < 2) continue;
-    const keep =
-      bucket.find((t) => t.id.startsWith("custom-foryou-")) ??
-      bucket
-        .slice()
-        .sort((a, b) => {
-          const tsA = Number(a.id.split("-")[1]) || 0;
-          const tsB = Number(b.id.split("-")[1]) || 0;
-          return tsB - tsA;
-        })[0];
-    for (const t of bucket) {
-      if (t.id !== keep.id) store.tasks.delete(t.id);
-    }
-  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("plan_id", planId)
+    .order("day_offset", { ascending: true })
+    .order("order_index", { ascending: true });
+  if (error || !data) return [];
+  return (data as TaskRow[]).map(rowToTask);
 }
 
 export async function updateTaskStatus(
   taskId: string,
   status: TaskStatus,
 ): Promise<Task | null> {
-  const task = store.tasks.get(taskId);
-  if (!task) return null;
-  const updated: Task = {
-    ...task,
+  const supabase = await createSupabaseServerClient();
+  const updates: Record<string, unknown> = {
     status,
-    completedAt: status === "done" ? new Date().toISOString() : null,
-    // Marking a task back to pending discards any prior "did this stick?"
-    // answer; the user has to re-evaluate after completing it again.
-    keeperState: status === "done" ? task.keeperState : "none",
+    completed_at: status === "done" ? new Date().toISOString() : null,
   };
-  store.tasks.set(taskId, updated);
-  return updated;
+  // Re-opening a completed task clears its keeper decision so the
+  // user gets re-prompted next time they complete it.
+  if (status !== "done") updates.keeper_state = "none";
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .update(updates)
+    .eq("id", taskId)
+    .select()
+    .single();
+  if (error || !data) return null;
+  return rowToTask(data as TaskRow);
 }
 
 export async function setTaskKeeperState(
   taskId: string,
   state: KeeperState,
 ): Promise<Task | null> {
-  const task = store.tasks.get(taskId);
-  if (!task) return null;
-  const updated: Task = { ...task, keeperState: state };
-  store.tasks.set(taskId, updated);
-  return updated;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .update({ keeper_state: state })
+    .eq("id", taskId)
+    .select()
+    .single();
+  if (error || !data) return null;
+  return rowToTask(data as TaskRow);
 }
 
-// Reset all of a user's plan state back to "fresh": every task pending,
-// no badges earned, no custom tasks, no saved For You items. Called when
-// a user (re-)onboards so their checklist starts empty regardless of any
-// prior dev-session toggles.
+// Reset the user's plan state back to "fresh": every starter task pending,
+// keeper decisions cleared, badges cleared, custom-from-For-You tasks deleted.
+// Called on (re-)onboarding.
 export async function resetPlanProgress(userId: string): Promise<void> {
-  for (const [id, task] of store.tasks) {
-    if (task.userId !== userId) continue;
-    if (task.id.startsWith("custom-")) {
-      store.tasks.delete(id);
-    } else {
-      store.tasks.set(id, { ...task, status: "pending", completedAt: null });
-    }
-  }
-  store.userBadges = store.userBadges.filter((ub) => ub.userId !== userId);
-  store.savedItems = store.savedItems.filter((s) => s.userId !== userId);
+  const supabase = await createSupabaseServerClient();
+
+  // Delete any custom tasks created from For You items
+  await supabase
+    .from("tasks")
+    .delete()
+    .eq("user_id", userId)
+    .not("source_item_id", "is", null);
+
+  // Reset remaining tasks' progress
+  await supabase
+    .from("tasks")
+    .update({
+      status: "pending",
+      completed_at: null,
+      keeper_state: "none",
+    })
+    .eq("user_id", userId);
+
+  // Clear earned badges (admin client — RLS blocks user_badges writes)
+  const admin = createSupabaseAdminClient();
+  await admin.from("user_badges").delete().eq("user_id", userId);
 }
 
-// --- Saved For You items -------------------------------------------------
+// ============================================================
+// Badges
+// ============================================================
 
-export async function getSavedItems(userId: string): Promise<SavedItem[]> {
-  return store.savedItems
-    .filter((s) => s.userId === userId)
-    .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+export async function getBadges(): Promise<Badge[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("badges")
+    .select("*")
+    .order("slug");
+  if (error || !data) return [];
+  return (data as BadgeRow[]).map(rowToBadge);
 }
 
-export async function saveForYouItem(
+export async function getUserBadges(userId: string): Promise<UserBadge[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("user_badges")
+    .select("*")
+    .eq("user_id", userId);
+  if (error || !data) return [];
+  return (data as UserBadgeRow[]).map((r) => ({
+    userId: r.user_id,
+    badgeId: r.badge_id,
+    earnedAt: r.earned_at,
+  }));
+}
+
+// Toggle a task's status and grant any newly-earned badges atomically.
+// Badge writes use the service-role client because RLS intentionally
+// blocks client INSERTs on user_badges — granting must be server-validated.
+export async function toggleTaskAndAwardBadges(
   userId: string,
-  item: ForYouItem,
-  interest: string,
-  state: SavedItemState = "shortlist",
-): Promise<SavedItem> {
-  const existingIdx = store.savedItems.findIndex(
-    (s) => s.userId === userId && s.forYouItemId === item.id,
-  );
-  const saved: SavedItem = {
-    forYouItemId: item.id,
-    userId,
-    snapshot: item,
-    interest,
-    state,
-    savedAt: new Date().toISOString(),
-  };
-  if (existingIdx >= 0) {
-    store.savedItems[existingIdx] = saved;
-  } else {
-    store.savedItems.push(saved);
+  taskId: string,
+  nextStatus: TaskStatus,
+): Promise<{ task: Task | null; newlyEarned: Badge[] }> {
+  const task = await updateTaskStatus(taskId, nextStatus);
+  if (!task) return { task: null, newlyEarned: [] };
+
+  const [planTasks, allBadges, earned] = await Promise.all([
+    getTasksForPlan(task.planId),
+    getBadges(),
+    getUserBadges(userId),
+  ]);
+  const earnedIds = new Set(earned.map((ub) => ub.badgeId));
+
+  const newlyEarned = evaluateBadges(planTasks, allBadges, earnedIds);
+  if (newlyEarned.length > 0) {
+    const admin = createSupabaseAdminClient();
+    const rows = newlyEarned.map((b) => ({
+      user_id: userId,
+      badge_id: b.id,
+    }));
+    await admin.from("user_badges").insert(rows);
   }
-  return saved;
+
+  return { task, newlyEarned };
 }
 
-export async function unsaveForYouItem(
-  userId: string,
-  forYouItemId: string,
-): Promise<void> {
-  store.savedItems = store.savedItems.filter(
-    (s) => !(s.userId === userId && s.forYouItemId === forYouItemId),
-  );
-}
-
-export async function setSavedItemState(
-  userId: string,
-  forYouItemId: string,
-  state: SavedItemState,
-): Promise<void> {
-  const idx = store.savedItems.findIndex(
-    (s) => s.userId === userId && s.forYouItemId === forYouItemId,
-  );
-  if (idx >= 0) {
-    store.savedItems[idx] = { ...store.savedItems[idx], state };
-  }
-}
-
-// --- Custom tasks (created from For You) --------------------------------
+// ============================================================
+// Custom tasks created from For You / recommendation items
+// ============================================================
 
 const FOR_YOU_TYPE_TO_CATEGORY: Record<ForYouItem["type"], TaskCategory> = {
   event: "community",
@@ -250,86 +380,52 @@ const FOR_YOU_TYPE_TO_CATEGORY: Record<ForYouItem["type"], TaskCategory> = {
   resource: "routine",
 };
 
-// Deterministic ID for a custom task created from a For You item, so
-// repeated "Add to my plan" clicks are idempotent rather than duplicating.
-export function customTaskIdForItem(itemId: string): string {
-  return `custom-foryou-${itemId}`;
-}
-
+// Idempotent "Add to my plan" for a recommendation item. Unique partial
+// index on (user_id, source_item_id) means the DB rejects duplicates;
+// we check first to keep the public API simple.
 export async function createTaskFromForYou(
   userId: string,
   planId: string,
   item: ForYouItem,
   currentDay: number,
 ): Promise<Task> {
-  const id = customTaskIdForItem(item.id);
-  const existing = store.tasks.get(id);
-  if (existing) return existing;
+  const supabase = await createSupabaseServerClient();
 
-  // Schedule the task for the next reasonable day so it pops up as
-  // a near-term action rather than a far-out commitment.
+  // If the user has already added this item, return the existing task.
+  const { data: existing } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("source_item_id", item.id)
+    .maybeSingle();
+  if (existing) return rowToTask(existing as TaskRow);
+
+  // Otherwise insert. Schedule for the next reasonable day so it pops up
+  // near-term rather than as a far-out commitment.
   const dayOffset = Math.max(0, currentDay + 1);
   const phase = phaseForDay(dayOffset);
-  const task: Task = {
-    id,
-    planId,
-    userId,
-    category: FOR_YOU_TYPE_TO_CATEGORY[item.type],
-    phase,
-    title: item.title,
-    description: item.shortDescription,
-    dayOffset,
-    linkUrl: item.links[0]?.url ?? null,
-    status: "pending",
-    completedAt: null,
-    orderIndex: 0,
-    isEventAttendance: item.type === "event" || item.type === "class",
-    isRecurringActivity: false,
-    keeperState: "none",
-  };
-  store.tasks.set(id, task);
-  return task;
-}
 
-export async function getBadges(): Promise<Badge[]> {
-  return [...store.badges];
-}
-
-export async function getUserBadges(userId: string): Promise<UserBadge[]> {
-  return store.userBadges.filter((b) => b.userId === userId);
-}
-
-async function grantBadge(userId: string, badgeId: string): Promise<void> {
-  const already = store.userBadges.some(
-    (ub) => ub.userId === userId && ub.badgeId === badgeId,
-  );
-  if (already) return;
-  store.userBadges.push({
-    userId,
-    badgeId,
-    earnedAt: new Date().toISOString(),
-  });
-}
-
-// Toggle a task and grant any newly-earned badges atomically.
-// In Supabase this becomes a single transaction (or RPC).
-export async function toggleTaskAndAwardBadges(
-  userId: string,
-  taskId: string,
-  nextStatus: TaskStatus,
-): Promise<{ task: Task | null; newlyEarned: Badge[] }> {
-  const task = await updateTaskStatus(taskId, nextStatus);
-  if (!task) return { task: null, newlyEarned: [] };
-
-  const planTasks = await getTasksForPlan(task.planId);
-  const allBadges = await getBadges();
-  const earned = await getUserBadges(userId);
-  const earnedIds = new Set(earned.map((ub) => ub.badgeId));
-
-  const newlyEarned = evaluateBadges(planTasks, allBadges, earnedIds);
-  for (const badge of newlyEarned) {
-    await grantBadge(userId, badge.id);
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert({
+      plan_id: planId,
+      user_id: userId,
+      category: FOR_YOU_TYPE_TO_CATEGORY[item.type],
+      phase,
+      title: item.title,
+      description: item.shortDescription,
+      day_offset: dayOffset,
+      link_url: item.links[0]?.url ?? null,
+      status: "pending" as TaskStatus,
+      order_index: 0,
+      is_event_attendance: item.type === "event" || item.type === "class",
+      is_recurring_activity: false,
+      source_item_id: item.id,
+    })
+    .select()
+    .single();
+  if (error || !data) {
+    throw new Error(`createTaskFromForYou failed: ${error?.message}`);
   }
-
-  return { task, newlyEarned };
+  return rowToTask(data as TaskRow);
 }

@@ -101,6 +101,11 @@ export type Task = {
   isEventAttendance: boolean;
   isRecurringActivity: boolean;
   keeperState: KeeperState;
+  // Source item id when the task was created from a recommendation
+  // ("+ Add to plan" on a For You item). Null for standard plan tasks.
+  // Used to dedup "+ Add to plan" clicks and detect "is this item already
+  // in the user's plan?"
+  sourceItemId: string | null;
 };
 
 export type BadgeCriteria =

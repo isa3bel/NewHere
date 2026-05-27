@@ -58,20 +58,11 @@ export default async function PlanPage() {
   const summary = moveSummary(currentDay);
 
   const notForMeItemIds = new Set<string>();
-  for (const t of tasks) {
-    if (
-      t.id.startsWith("custom-foryou-") &&
-      t.keeperState === "not_for_me"
-    ) {
-      notForMeItemIds.add(t.id.replace("custom-foryou-", ""));
-    }
-  }
-
   const inPlanItemIds = new Set<string>();
   for (const t of tasks) {
-    if (t.id.startsWith("custom-foryou-")) {
-      inPlanItemIds.add(t.id.replace("custom-foryou-", ""));
-    }
+    if (!t.sourceItemId) continue;
+    inPlanItemIds.add(t.sourceItemId);
+    if (t.keeperState === "not_for_me") notForMeItemIds.add(t.sourceItemId);
   }
 
   const preMoveSuggestions: PreMoveTile[] =
