@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { invalidateCachedSuggestions } from "@/lib/ai/cache";
-import { requireUser } from "@/lib/auth";
+import { requireAdmin, requireUser } from "@/lib/auth";
 import { CELEBRATION_COOKIE } from "@/lib/celebration";
 import {
   createTaskFromForYou,
@@ -143,6 +143,25 @@ export async function submitFeedbackAction(
     return { status: "error", message: `Submit failed: ${error.message}` };
   }
   return { status: "ok" };
+}
+
+// Admin-only: toggle a feedback row between resolved and reopened.
+// Drives the "Mark resolved" / "Reopen" buttons on /admin/feedback.
+// Uses the service-role client because RLS limits regular SELECT/UPDATE
+// to the row owner — and the admin isn't necessarily the reporter.
+export async function setFeedbackStatusAction(formData: FormData) {
+  await requireAdmin();
+  const id = formData.get("id") as string;
+  const nextStatus = formData.get("nextStatus") as
+    | "new"
+    | "resolved"
+    | "reviewing"
+    | "dismissed";
+  if (!id || !nextStatus) return;
+
+  const admin = createSupabaseAdminClient();
+  await admin.from("feedback").update({ status: nextStatus }).eq("id", id);
+  revalidatePath("/admin/feedback");
 }
 
 // Permanently delete the signed-in user and all their data. The auth.users
