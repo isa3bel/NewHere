@@ -69,9 +69,11 @@ export default async function PlanPage() {
 
   const notForMeItemIds = new Set<string>();
   const inPlanItemIds = new Set<string>();
+  const completedItemIds = new Set<string>();
   for (const t of tasks) {
     if (!t.sourceItemId) continue;
     inPlanItemIds.add(t.sourceItemId);
+    if (t.status === "done") completedItemIds.add(t.sourceItemId);
     if (t.keeperState === "not_for_me") notForMeItemIds.add(t.sourceItemId);
   }
 
@@ -101,6 +103,7 @@ export default async function PlanPage() {
       item: toForYouItem(s),
       interest: s.matchedInterest,
       addedToPlan: inPlanItemIds.has(s.id),
+      completed: completedItemIds.has(s.id),
     }));
 
   return (

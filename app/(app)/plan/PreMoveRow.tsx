@@ -2,7 +2,10 @@
 
 import { useEffect, useState, useTransition } from "react";
 
-import { addForYouToPlanAction } from "@/app/actions";
+import {
+  addForYouToPlanAction,
+  markForYouCompletedAction,
+} from "@/app/actions";
 import { uniqByUrl } from "@/lib/ai/sanitize";
 import type { ForYouItem } from "@/lib/for-you-data";
 
@@ -10,19 +13,25 @@ type Props = {
   item: ForYouItem;
   interest: string;
   addedToPlan: boolean;
+  completed: boolean;
 };
 
 // Click the row → expands inline to reveal the rich content the model
 // generated (longDescription, all links, meta tags). Click again → collapse.
-// The "+ plan" button is rendered with stopPropagation so clicking it
-// doesn't trigger the expand toggle.
 //
-// Once added to plan, the same content gets persisted to tasks.details_json
-// so the right-panel detail view in Week 1 shows the same info — no
-// generic placeholders.
-export function PreMoveRow({ item, interest, addedToPlan }: Props) {
+// Two side actions, both rendered as <span role="button"> because they
+// live inside a parent <button> (the row expander). Browsers won't render
+// nested actual <button>s.
+//
+//   + plan       → adds to Week 1 as pending
+//   ✓ Mark done  → adds + immediately marks done in one click (for things
+//                  the user has already taken care of pre-move)
+//
+// Once done, both buttons collapse into a single "Done" badge and the
+// row dims — terminal state. Toggle back off from the task in Week 1.
+export function PreMoveRow({ item, interest, addedToPlan, completed }: Props) {
   const [pending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<"added" | null>(null);
+  const [feedback, setFeedback] = useState<"added" | "done" | null>(null);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -35,9 +44,17 @@ export function PreMoveRow({ item, interest, addedToPlan }: Props) {
     setFeedback("added");
     startTransition(() => addForYouToPlanAction({ item, interest }));
   };
+  const handleMarkDone = () => {
+    setFeedback("done");
+    startTransition(() => markForYouCompletedAction({ item, interest }));
+  };
 
   return (
-    <li className="rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+    <li
+      className={`rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden ${
+        completed ? "opacity-60" : ""
+      }`}
+    >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -48,7 +65,13 @@ export function PreMoveRow({ item, interest, addedToPlan }: Props) {
           {item.icon}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{item.title}</p>
+          <p
+            className={`text-sm font-medium truncate ${
+              completed ? "line-through" : ""
+            }`}
+          >
+            {item.title}
+          </p>
           <p className="text-xs text-[var(--muted-foreground)] truncate">
             {item.shortDescription}
           </p>
@@ -59,43 +82,49 @@ export function PreMoveRow({ item, interest, addedToPlan }: Props) {
         >
           {expanded ? "▴" : "▾"}
         </span>
-        <span
-          role="button"
-          tabIndex={0}
-          aria-label={addedToPlan ? "Already in plan" : "Add to plan"}
-          aria-disabled={pending || addedToPlan}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (pending || addedToPlan) return;
-            handleAdd();
-          }}
-          onKeyDown={(e) => {
-            if (pending || addedToPlan) return;
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.stopPropagation();
-              handleAdd();
-            }
-          }}
-          className={`text-xs h-7 px-2.5 rounded-full font-medium transition flex-shrink-0 inline-flex items-center cursor-pointer ${
-            addedToPlan
-              ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-default"
-              : "border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-          } ${pending ? "opacity-60 cursor-not-allowed" : ""}`}
-        >
-          {addedToPlan ? "✓ in plan" : "+ plan"}
-        </span>
+
+        {completed ? (
+          <span
+            className="text-xs h-7 px-2.5 rounded-full font-medium bg-[var(--accent)] text-[var(--accent-foreground)] inline-flex items-center flex-shrink-0"
+            aria-label="Already done"
+          >
+            ✓ Done
+          </span>
+        ) : (
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <RowButton
+              onActivate={handleAdd}
+              disabled={pending || addedToPlan}
+              variant={addedToPlan ? "muted" : "outline"}
+              label={addedToPlan ? "Already in plan" : "Add to plan"}
+            >
+              {addedToPlan ? "✓ in plan" : "+ plan"}
+            </RowButton>
+            <RowButton
+              onActivate={handleMarkDone}
+              disabled={pending}
+              variant="outline"
+              label="Mark already done"
+            >
+              ✓ done
+            </RowButton>
+          </div>
+        )}
       </button>
 
       {expanded && (
         <div className="px-3 py-3 border-t border-[var(--border)] bg-[var(--background)]">
           <p className="text-sm leading-relaxed">{item.longDescription}</p>
 
-          {(item.meta?.cost || item.meta?.schedule || item.meta?.location ||
+          {(item.meta?.cost ||
+            item.meta?.schedule ||
+            item.meta?.location ||
             item.date) && (
             <ul className="mt-3 flex flex-wrap gap-2">
               {item.date && <MetaChip label="When" value={item.date} />}
-              {item.meta?.cost && <MetaChip label="Cost" value={item.meta.cost} />}
+              {item.meta?.cost && (
+                <MetaChip label="Cost" value={item.meta.cost} />
+              )}
               {item.meta?.schedule && (
                 <MetaChip label="Schedule" value={item.meta.schedule} />
               )}
@@ -125,13 +154,63 @@ export function PreMoveRow({ item, interest, addedToPlan }: Props) {
         </div>
       )}
 
-      {feedback === "added" && (
+      {feedback && (
         <div className="px-3 py-1.5 border-t border-[var(--border)] bg-[var(--background)] text-xs text-[var(--muted-foreground)] flex items-center gap-2">
           <span className="text-[var(--accent)]">✓</span>
-          <span>Added to your plan — look in Week 1 below.</span>
+          <span>
+            {feedback === "added"
+              ? "Added to your plan — look in Week 1 below."
+              : "Marked done — check Week 1 for the entry."}
+          </span>
         </div>
       )}
     </li>
+  );
+}
+
+function RowButton({
+  onActivate,
+  disabled,
+  variant,
+  label,
+  children,
+}: {
+  onActivate: () => void;
+  disabled: boolean;
+  variant: "outline" | "muted";
+  label: string;
+  children: React.ReactNode;
+}) {
+  const base =
+    "text-xs h-7 px-2.5 rounded-full font-medium transition inline-flex items-center";
+  const styles =
+    variant === "muted"
+      ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-default"
+      : "border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer";
+  const disabledStyles = disabled ? "opacity-60 cursor-not-allowed" : "";
+  return (
+    <span
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-label={label}
+      aria-disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (disabled) return;
+        onActivate();
+      }}
+      onKeyDown={(e) => {
+        if (disabled) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onActivate();
+        }
+      }}
+      className={`${base} ${styles} ${disabledStyles}`}
+    >
+      {children}
+    </span>
   );
 }
 

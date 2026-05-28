@@ -213,3 +213,49 @@ export async function addForYouToPlanAction(args: {
 
   revalidatePath("/plan");
 }
+
+// "Mark done" on a pre-move recommendation: the user has already done it
+// (or doesn't need to plan for it) and wants credit. Adds the task to
+// their plan AND flips it to done in one click — so it shows up in their
+// history, contributes to badges, and the row reflects the completed
+// state. Idempotent: re-clicking on an already-done task is a no-op.
+export async function markForYouCompletedAction(args: {
+  item: ForYouItem;
+  interest: string;
+}) {
+  const user = await requireUser();
+  const [profile, plan] = await Promise.all([
+    getProfile(user.id),
+    getActivePlan(user.id),
+  ]);
+  if (!plan) return;
+
+  const currentDay = profile?.moveDate ? daysSinceMove(profile.moveDate) : 0;
+  // createTaskFromForYou is idempotent — returns the existing row if it
+  // already exists, otherwise inserts a new pending one.
+  const task = await createTaskFromForYou(
+    user.id,
+    plan.id,
+    args.item,
+    currentDay,
+  );
+
+  // Now flip to done. Routes through badge evaluation so any milestones
+  // crossed by this completion are awarded too.
+  const { newlyEarned } = await toggleTaskAndAwardBadges(
+    user.id,
+    task.id,
+    "done",
+  );
+
+  if (newlyEarned.length > 0) {
+    const cookieStore = await cookies();
+    cookieStore.set(
+      CELEBRATION_COOKIE,
+      newlyEarned.map((b) => b.id).join(","),
+      { httpOnly: true, sameSite: "lax", path: "/", maxAge: 30 },
+    );
+  }
+
+  revalidatePath("/plan");
+}

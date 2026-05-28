@@ -22,6 +22,7 @@ export type PreMoveTile = {
   item: ForYouItem;
   interest: string;
   addedToPlan: boolean;
+  completed: boolean;
 };
 
 const PHASE_ORDER: Phase[] = ["week_one", "month_one", "quarter_one"];
@@ -161,6 +162,7 @@ export function PlanView({
                     item={p.item}
                     interest={p.interest}
                     addedToPlan={p.addedToPlan}
+                    completed={p.completed}
                   />
                 ))}
               </ul>
