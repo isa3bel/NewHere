@@ -1,122 +1,145 @@
-# NewHere — MVP Product Requirements Document
+# NewHere — Product Requirements
 
-## 1. Target User
+A living document describing what NewHere is, who it's for, and the product decisions that shaped it. For technical architecture see [README.md](README.md).
 
-Adults (22–40) who have recently moved (or are about to move) to a new city — domestic relocations, remote workers, recent grads, and trailing partners. They are motivated to rebuild a social life but feel overwhelmed by where to start.
+## 1. Target user
 
-Primary persona: a 28-year-old who moved for a job, knows nobody locally, and wants structure rather than an open-ended list of "things to do."
+Adults (~22–40) who have recently moved or are about to move to a new US city — domestic relocations, remote workers, recent grads, trailing partners. They're motivated to rebuild a social life and form healthy routines but feel overwhelmed by where to start.
 
-## 2. Core User Problem
+Primary persona: a 28-year-old who moved for a job, knows nobody locally, has 3 weeks of "I'll get to it" anxiety about doctors / DMV / community, and wants structure rather than an open-ended list of "things to do."
 
-Moving to a new city creates a friction-heavy gap between *intending* to build a life and *actually* showing up to recurring activities. Existing tools (Meetup, Reddit, city subreddits, Google) surface options but don't sequence them, don't account for the user's interests, and don't create accountability. Users churn before they form any routine.
+## 2. Core user problem
 
-NewHere solves this by turning "build a life here" into a concrete, time-boxed plan with checkable actions.
+Moving to a new city creates a friction-heavy gap between *intending* to build a life and *actually* showing up. Existing tools (Meetup, Reddit, Google) surface options but don't sequence them, don't account for personal interests or social style, and don't tell you which local utility company to call. Users churn before they form any routine.
 
-## 3. MVP Feature List
+NewHere reframes "build a life in a new city" as a concrete time-boxed plan with checkable actions, personalized to the specific city the user is moving to.
 
-1. **Onboarding quiz** — 6–10 questions: destination city, move date, interests (multi-select from ~20 tags), social energy level (introvert/ambivert/extrovert), priorities (fitness, creative, professional, spiritual, volunteer, nightlife), constraints (budget, has car, has kids/pets).
-2. **Plan generation** — produces a 7 / 30 / 90-day plan with categorized actions (Community, Hobby, Routine, Exploration). Each action has a title, short description, suggested cadence, and an external link or search query template (e.g., "search Meetup for 'bouldering' near Austin").
-3. **Plan dashboard** — three tabs (Week 1, Month 1, Quarter 1) showing actions as a checklist. User can mark complete, snooze, or dismiss.
-4. **Progress tracking** — visible progress bar per phase; streak counter for "weeks active."
-5. **Account + persistence** — email magic-link auth via Supabase; plan saved to user account.
-6. **Re-generate / edit plan** — user can update interests and regenerate, or manually add a custom action.
+## 3. Product shape
 
-## 4. Out of Scope (MVP)
+The plan is organized into three phases that correspond to mental states a new arrival actually moves through:
 
-- Native mobile apps (web-responsive only).
-- In-app messaging, friend matching, or any social graph.
-- Real-time event ingestion from Meetup/Eventbrite/Partiful APIs (use static category links + search templates instead).
-- Payments / subscriptions.
-- Coach or human review of plans.
-- Multi-city plans or "I'm visiting" mode.
-- Push notifications (email reminders only, and only if trivial to add — otherwise defer).
-- AI chat interface — plan generation is rules-based or single LLM call, not conversational.
-- City-specific curated content beyond the top ~10 launch cities.
+| Phase | Days | Frame | What it surfaces |
+|---|---|---|---|
+| **Week 1** — Land & settle | 0–6 | "Get the basics in place" | 8 city-specific essentials: license + registration, address updates, utilities, library card, healthcare, transit, daily shops, home safety |
+| **Month 1** — Try things | 7–29 | "Sample broadly, don't commit yet" | 11 outcome-clustered tiles across community / hobby / routine / exploration |
+| **Quarter 1** — Your routine | 30–89 | "What stuck becomes your week" | Synthesized weekly grid from anchors the user marked "Keep" |
 
-## 5. User Flow
+The third phase is intentionally **not** another checklist — by day 30 the user shouldn't be following a script, they should be looking at the structure of their actual week.
 
-1. **Landing page** → value prop, sample plan preview, "Get my plan" CTA.
-2. **Onboarding quiz** (no auth required) → 6–10 screens, one question each.
-3. **Plan preview** → show first few Week-1 actions blurred behind sign-up.
-4. **Auth** → email magic link (Supabase).
-5. **Full plan dashboard** → Week 1 tab default; user checks off first action.
-6. **Return visits** → land directly on dashboard; current phase highlighted based on move date.
-7. **Edit/regenerate** → settings page to update interests or move date.
+### Pre-move state
 
-## 6. Data Model
+If the user's move date is in the future, the plan page replaces the day-by-day checklist with a "Prepare for your move" surface — communities, subreddits, and organizations they can engage with online before arriving. Once move date passes, this disappears and the dated plan kicks in.
+
+## 4. Personalization
+
+The 28 starter tasks are fixed (every user gets the same slots). What's personalized is the **content within each slot**:
+
+- **Title** — names the specific local thing where one exists. "Get a Clipper card" for SF, "Get a CapMetro card" for Austin — not "Learn your transit options."
+- **Detailed how-to** — steps, document checklists, hours, links, Google Maps deep-links for the local DMV / utility provider / library system.
+- **Pre-move suggestions** — communities, subreddits, organizations specific to the user's interests + city.
+
+Personalization is generated by Claude with web search, run once per user per profile-fingerprint and cached. Profile fingerprint = SHA256 of `(city, neighborhood, interests, goals, social style, budget)`. Editing the profile invalidates the cache; everything else (page navigation, task completion, browser refresh) is a free read.
+
+### Why an AI approach over a static catalog
+
+A static catalog of "the 10 launch cities" would let us ship faster but bound the product to the cities we curated. AI + web search means the user can put in *any* city and get reasonably personalized content. The cost (~$0.15 per user per profile change) is acceptable; the staffing model for maintaining curated content per city was not.
+
+### Fallback model
+
+If the AI call fails (network, rate limit, model error), the page renders with generic content — same task titles as the static `mockTasks` — plus a banner offering to retry. The user can still use the plan; it just isn't tailored to their city.
+
+## 5. Onboarding flow
+
+1. **Landing** (`/`) — explains the product, links to `/sample` for an Austin demo
+2. **Sign in** (`/sign-in`) — magic link via Supabase + Resend SMTP
+3. **Onboarding** (`/onboarding`) — single-screen form: name, city, neighborhood (optional), move date, social style, budget, interests, goals, has-car
+4. **Plan** (`/plan`) — first load triggers AI generation (~15–30s with a skeleton loading state); subsequent loads are instant
+5. **Profile** (`/profile`) — edit any field; saves invalidate the AI cache; danger-zone delete-account button
+
+Sample page (`/sample`) is unauthenticated. Shows a Day-1 Austin plan with hand-written content that mimics AI output — lets prospects see the product without signing up.
+
+## 6. Feedback loop
+
+Authenticated users see "💬 Send feedback" in the sidebar. The form takes a category (Bug / Suggestion / General), a message, and an optional "where did this happen?" context. Submissions land in `feedback` (Supabase) and appear on `/admin/feedback` for the founder to triage — categorical filter pills + inline resolve/reopen toggle + collapsed-resolved section so the workspace stays focused.
+
+## 7. Tech stack
+
+See [README.md](README.md) for setup. Key choices:
+
+- **Next.js 16 App Router** — server components for fast plan rendering; server actions for mutations
+- **Supabase Postgres + Auth** with Row Level Security on every user-owned table
+- **Claude Haiku 4.5 + `web_search` tool** for AI personalization (Anthropic API)
+- **Vercel** — production deploy with auto-deploy on push
+- **Resend SMTP** — bypasses Supabase's built-in email throttle
+- **Tailwind v4** — no UI component library, direct styling
+
+Notable absences from the original spec that were dropped:
+- ~~PostHog analytics~~ → Vercel Web Analytics (one component, zero config)
+- ~~shadcn/ui~~ → just Tailwind (less surface area to maintain)
+- ~~React Hook Form + Zod~~ → native form actions with hand-rolled validators
+- ~~Playwright tests~~ → none yet; manual QA via founder + tester walkthrough
+
+## 8. Data model
+
+Lives in [supabase/migrations/](supabase/migrations/). High-level:
 
 ```
-users (managed by Supabase Auth)
-  id (uuid, pk)
-  email
-  created_at
+auth.users (Supabase-managed)
+  └─ profiles (1:1)         city, neighborhood, move_date, social_style,
+  │                         budget_tier, interests[], goals[], has_car
+  ├─ plans (1 active)
+  │   └─ tasks (28 starter + custom For You)
+  │       title, description, day_offset, category, phase,
+  │       status, keeper_state, source_item_id, details_json
+  ├─ ai_suggestions         cached AI output keyed by surface + fingerprint
+  ├─ ai_generations         audit log of every AI call (tokens, cost, status)
+  ├─ user_badges            badges earned
+  └─ feedback               user-submitted bug reports / ideas
 
-profiles
-  user_id (uuid, fk → users.id, pk)
-  city
-  move_date (date)
-  social_energy (enum: low | medium | high)
-  has_car (bool)
-  budget_tier (enum: low | medium | high)
-  interests (text[])         -- tag slugs
-  priorities (text[])        -- category slugs
-  updated_at
-
-plans
-  id (uuid, pk)
-  user_id (uuid, fk)
-  generated_at (timestamptz)
-  version (int)              -- increments on regenerate
-  is_active (bool)
-
-actions
-  id (uuid, pk)
-  plan_id (uuid, fk)
-  phase (enum: week | month | quarter)
-  category (enum: community | hobby | routine | exploration)
-  title (text)
-  description (text)
-  cadence (text)             -- e.g., "once", "weekly"
-  link_url (text, nullable)
-  order_index (int)
-
-action_status
-  action_id (uuid, fk, pk part)
-  user_id (uuid, fk, pk part)
-  state (enum: pending | done | snoozed | dismissed)
-  completed_at (timestamptz, nullable)
-
-city_content (seed data, read-only)
-  city (text)
-  category (text)
-  template_title (text)
-  template_description (text)
-  link_template (text)       -- with {{interest}} placeholder
+badges (global, reference data)
 ```
 
-## 7. Recommended Tech Stack
+## 9. Cost + scale considerations
 
-- **Framework:** Next.js 15 (App Router, React Server Components). Server actions for mutations; route handlers only where needed.
-- **Auth + DB:** Supabase — Postgres with Row Level Security policies keyed on `auth.uid()`. Magic-link email auth.
-- **Styling:** Tailwind CSS v4 with a small design-token layer; shadcn/ui for primitives (Button, Card, Checkbox, Tabs, Dialog).
-- **Hosting:** Vercel (preview deploys per PR, production on `main`).
-- **Plan generation:** Single server action that takes the profile and produces actions. v0 = rules engine over the `city_content` table joined with the user's interests. If quality is poor, swap in one Anthropic API call (Haiku 4.5) — keep the interface identical so generation strategy is replaceable.
-- **Email (reminders):** Resend, triggered by a Vercel cron daily.
-- **Analytics:** PostHog (self-hosted EU or cloud) for funnel from landing → quiz → signup → first-action-checked.
-- **Forms/validation:** React Hook Form + Zod (Zod schema shared between client and server actions).
-- **Testing:** Playwright for the onboarding → plan-generation → check-off happy path. Skip unit tests at MVP except for the plan-generation function.
+This is an MVP optimized for cost-per-user rather than peak throughput.
 
-## 8. Acceptance Criteria
+- **AI generation**: ~$0.15 per surface (pre_move or week_one) per user per profile-fingerprint change. New user = ~$0.30 one-time. Profile edits = ~$0.30 each. Browsing = $0.
+- **Hard caps**: Anthropic console spend limit (currently $10/mo) + per-user daily generation limit (5 for users, 50 for admin testing).
+- **Vercel function timeout**: `/plan` has `maxDuration = 60` to accommodate web search. Pre-move + Week 1 run in parallel so total time is `max()`, not sum.
+- **Supabase**: free tier handles thousands of users; cache rows accumulate but a periodic cleanup can be added later.
 
-The MVP is shippable when all of the following are true:
+## 10. Out of scope (intentionally)
 
-1. A new visitor can complete the quiz in under 3 minutes on mobile (Lighthouse mobile score ≥ 85).
-2. After quiz + sign-up, a user sees a plan with **≥ 5 actions in Week 1, ≥ 8 in Month 1, ≥ 8 in Quarter 1**, all relevant to their selected interests and city.
-3. Checking off an action persists across reload and across devices.
-4. RLS is enabled on every user-owned table; a verified test confirms user A cannot read user B's plan or actions.
-5. The top 10 launch cities each have seed content for every interest tag (no empty plans).
-6. A user can update their interests and regenerate; the new plan replaces the old as active, and history is preserved (`plans.version` increments, old `is_active = false`).
-7. Magic-link auth works end-to-end on a deployed Vercel preview using a real email.
-8. Funnel events fire to PostHog: `quiz_started`, `quiz_completed`, `signup_completed`, `plan_generated`, `action_completed`.
-9. No personal data leaves Supabase except email (for auth) and event names (to PostHog).
-10. Mean time from landing-page load to first plan render (excluding signup) is under 8 seconds on a cold Vercel deploy.
+- Native mobile apps (web-responsive only)
+- In-app messaging, friend matching, social graph
+- Real-time event ingestion from Meetup/Eventbrite/Partiful APIs
+- Payments / subscriptions
+- Multi-city plans or "I'm visiting" mode
+- Push notifications (founder check the feedback dashboard)
+- AI chat interface — generation is one-shot, not conversational
+- Custom content per city beyond what web search + Claude provide
+
+## 11. Open product questions / what's next
+
+- **Month 1 AI** — currently uses the static `mockTasks` for the 11 "Try things" tiles. Should follow the same pattern as Week 1 (per-interest AI overlay) once feedback warrants the additional ~$0.15/user/regen cost.
+- **Anchor → routine generation** — Quarter 1 already synthesizes from kept anchors; no AI needed. Worth revisiting if anchor placement into time-of-day slots needs to be smarter (currently a hand-written lookup).
+- **Public launch metadata** — Open Graph + Twitter card images, custom domain.
+- **Custom email templates** — Supabase's default magic-link emails are plain; Resend could carry branded HTML.
+- **Status workflow** — feedback table supports `reviewing` and `dismissed`, but UI only toggles between `new` ↔ `resolved`. Add the full workflow when volume justifies.
+
+## 12. Success criteria
+
+The MVP is shippable to a small tester group (5–20 friends/colleagues) when all of the following are true. Most are now met.
+
+| | Criterion | Status |
+|---|---|---|
+| 1 | A new user can complete onboarding in under 3 minutes | ✓ |
+| 2 | First-time `/plan` load shows AI-personalized content or a clean failure banner | ✓ |
+| 3 | Checking off a task persists across reload and devices | ✓ |
+| 4 | RLS verified — user A cannot read user B's data | ✓ |
+| 5 | Magic-link auth works end-to-end on production | ✓ |
+| 6 | Per-user daily AI cap prevents runaway spend | ✓ |
+| 7 | Admin dashboard surfaces today's spend + new feedback at a glance | ✓ |
+| 8 | Loading states cover the 15–30s AI generation wait | ✓ |
+| 9 | Mobile rendering is functional (not necessarily polished) | Manual test pending |
+| 10 | Open Graph metadata so shared links unfurl with a preview | Pending |
