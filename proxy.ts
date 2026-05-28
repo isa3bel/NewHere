@@ -2,7 +2,11 @@ import type { NextRequest } from "next/server";
 
 import { updateSession } from "@/lib/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
+// Renamed from `middleware.ts` in Next.js 16. The function below used to
+// be called `middleware`; the convention name in v16+ is `proxy`.
+// Behavior is identical — runs before every matching request, refreshes
+// Supabase's auth cookie, and gates auth-protected routes.
+export async function proxy(request: NextRequest) {
   return await updateSession(request);
 }
 

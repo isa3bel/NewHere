@@ -1,9 +1,9 @@
 import { ImageResponse } from "next/og";
 
 // Dynamically generated Open Graph / link-preview image for the root.
-// Renders at build time, cached forever. Statically optimized — no
-// request-time APIs used. Picked up automatically by Next.js for
-// <meta property="og:image"> and <meta name="twitter:image">.
+// Rendered with Satori, which requires explicit `display: flex` on any
+// div that has more than one child — that's why every wrapper here
+// spells it out.
 
 export const alt =
   "NewHere — Your personalized 7/30/90-day plan for a new city";
@@ -45,10 +45,18 @@ export default async function Image() {
           <span style={{ fontWeight: 700, letterSpacing: -0.5 }}>NewHere</span>
         </div>
 
-        {/* Middle: main headline */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {/* Middle: main headline (two lines, each its own flex child) */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 24,
+          }}
+        >
           <div
             style={{
+              display: "flex",
+              flexDirection: "column",
               fontSize: 88,
               fontWeight: 700,
               color: "#1a1208",
@@ -56,12 +64,12 @@ export default async function Image() {
               letterSpacing: -2.5,
             }}
           >
-            Your first 90 days,
-            <br />
-            in any new city.
+            <span>Your first 90 days,</span>
+            <span>in any new city.</span>
           </div>
           <div
             style={{
+              display: "flex",
               fontSize: 36,
               color: "#5a4d3a",
               lineHeight: 1.3,
@@ -69,8 +77,7 @@ export default async function Image() {
               maxWidth: 900,
             }}
           >
-            A personalized plan to find your community, anchor your routine,
-            and feel at home.
+            A personalized plan to find your community, anchor your routine, and feel at home.
           </div>
         </div>
 
