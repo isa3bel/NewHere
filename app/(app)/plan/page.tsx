@@ -1,6 +1,13 @@
 import Link from "next/link";
 
 import { dismissCelebrationAction } from "@/app/actions";
+
+// Vercel default function timeout is 10s on Hobby, 15s on Pro. Real
+// Claude calls with web_search routinely take 15–30s, so we bump it.
+// 60s is the Hobby ceiling; Pro can go higher. Per Next.js docs this
+// also covers Server Actions invoked from this page (e.g. the
+// "Refresh suggestions" button → refreshAiSuggestionsAction).
+export const maxDuration = 60;
 import { PlanView } from "./PlanView";
 import type { PreMoveTile } from "./PlanView";
 import { getOrGeneratePreMoveSuggestions } from "@/lib/ai/generate-pre-move";
