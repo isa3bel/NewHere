@@ -79,6 +79,20 @@ export function ProfileForm({ existing, action, submitLabel }: Props) {
         />
       </Field>
 
+      <Field
+        label="Neighborhood"
+        hint="Optional — helps tailor super-local picks like which grocery store, coffee shop, or transit stop is closest to you."
+      >
+        <input
+          type="text"
+          name="neighborhood"
+          maxLength={80}
+          defaultValue={existing?.neighborhood ?? ""}
+          placeholder="e.g. Mission District, East Austin, Williamsburg"
+          className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 outline-none focus:border-[var(--accent)]"
+        />
+      </Field>
+
       <Field label="Move date" required>
         <input
           type="date"
@@ -185,10 +199,12 @@ export function ProfileForm({ existing, action, submitLabel }: Props) {
 function Field({
   label,
   required,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -197,6 +213,11 @@ function Field({
         {label}
         {required && <span className="text-[var(--accent)] ml-1">*</span>}
       </div>
+      {hint && (
+        <p className="mb-2 -mt-1 text-xs text-[var(--muted-foreground)]">
+          {hint}
+        </p>
+      )}
       {children}
     </label>
   );

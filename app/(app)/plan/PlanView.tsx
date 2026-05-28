@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { toggleTaskAction } from "@/app/actions";
+import type { AiWeekOneDetail } from "@/lib/ai/types";
 import type { ForYouItem } from "@/lib/for-you-data";
 import { getTaskGuide } from "@/lib/task-guides";
 import { phaseStatus } from "@/lib/plan-progress";
@@ -14,6 +15,7 @@ import { KeeperPrompt } from "./KeeperPrompt";
 import { Month1Section } from "./Month1Section";
 import { PreMoveRow } from "./PreMoveRow";
 import { Quarter1Section } from "./Quarter1Section";
+import { RefreshSuggestionsButton } from "./RefreshSuggestionsButton";
 
 export type PreMoveTile = {
   item: ForYouItem;
@@ -51,6 +53,7 @@ type Props = {
   todaysFocus: Task[];
   currentDay: number;
   preMoveSuggestions: PreMoveTile[];
+  weekOneOverlay: AiWeekOneDetail[];
   city: string | null;
 };
 
@@ -59,6 +62,7 @@ export function PlanView({
   todaysFocus,
   currentDay,
   preMoveSuggestions,
+  weekOneOverlay,
   city,
 }: Props) {
   const isPreMove = currentDay < 0;
@@ -110,6 +114,19 @@ export function PlanView({
     [todaysFocus],
   );
 
+  // Map slot key → AI overlay for fast lookup. Resolves to undefined for
+  // tasks with no matching overlay (every non-Week-1 task, or any Week 1
+  // task whose source_item_id wasn't set — backward compat for pre-migration
+  // user rows).
+  const overlayBySlot = useMemo(() => {
+    const m = new Map<string, AiWeekOneDetail>();
+    for (const d of weekOneOverlay) m.set(d.slotKey, d);
+    return m;
+  }, [weekOneOverlay]);
+
+  const overlayForTask = (t: Task): AiWeekOneDetail | undefined =>
+    t.sourceItemId ? overlayBySlot.get(t.sourceItemId) : undefined;
+
   return (
     <div className="lg:flex lg:gap-6">
       <div
@@ -121,11 +138,14 @@ export function PlanView({
       >
         {isPreMove ? (
           <section className="mb-12">
-            <div className="flex items-baseline justify-between mb-1">
+            <div className="flex items-baseline justify-between mb-1 gap-3">
               <h2 className="text-xl font-semibold">Prepare for your move</h2>
-              <span className="text-xs text-[var(--muted-foreground)] uppercase tracking-widest">
-                Pre-move
-              </span>
+              <div className="flex items-center gap-3">
+                <RefreshSuggestionsButton surface="pre_move" />
+                <span className="text-xs text-[var(--muted-foreground)] uppercase tracking-widest">
+                  Pre-move
+                </span>
+              </div>
             </div>
             <p className="text-sm text-[var(--muted-foreground)] mb-4">
               You&apos;re not in {city || "your new city"} yet — these are
@@ -169,6 +189,7 @@ export function PlanView({
                   <TaskRow
                     key={`focus-${task.id}`}
                     task={task}
+                    aiDetail={overlayForTask(task)}
                     isSelected={task.id === selectedId}
                     onSelect={() => setSelectedId(task.id)}
                     emphasis
@@ -252,6 +273,7 @@ export function PlanView({
                         <TaskRow
                           key={task.id}
                           task={task}
+                          aiDetail={overlayForTask(task)}
                           isSelected={task.id === selectedId}
                           onSelect={() => setSelectedId(task.id)}
                           muted={status === "past" && task.status !== "done"}
@@ -271,6 +293,7 @@ export function PlanView({
           <TaskDetailPanel
             ref={panelRef}
             task={selectedTask}
+            aiDetail={overlayForTask(selectedTask)}
             onClose={() => setSelectedId(null)}
           />
         </div>
@@ -281,6 +304,7 @@ export function PlanView({
 
 function TaskRow({
   task,
+  aiDetail,
   isSelected,
   onSelect,
   emphasis,
@@ -288,6 +312,7 @@ function TaskRow({
   focus,
 }: {
   task: Task;
+  aiDetail?: AiWeekOneDetail;
   isSelected: boolean;
   onSelect: () => void;
   emphasis?: boolean;
@@ -296,6 +321,10 @@ function TaskRow({
 }) {
   const done = task.status === "done";
   const nextStatus = done ? "pending" : "done";
+  // AI overlay (city-specific) takes precedence over the static title/desc
+  // that came from mockTasks. Falls through when no overlay exists.
+  const displayTitle = aiDetail?.titleOverride ?? task.title;
+  const displayDescription = aiDetail?.descriptionOverride ?? task.description;
 
   const baseRing = isSelected
     ? "border-[var(--accent)] ring-1 ring-[var(--accent)]"
@@ -343,7 +372,7 @@ function TaskRow({
           <h3
             className={`font-medium ${done ? "line-through text-[var(--muted-foreground)]" : ""}`}
           >
-            {task.title}
+            {displayTitle}
           </h3>
           <span
             className={`text-xs px-2 py-0.5 rounded-full capitalize ${CATEGORY_STYLES[task.category]}`}
@@ -359,9 +388,9 @@ function TaskRow({
             </span>
           )}
         </div>
-        {task.description && (
+        {displayDescription && (
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            {task.description}
+            {displayDescription}
           </p>
         )}
         {done && (task.isRecurringActivity || task.isEventAttendance) && (
@@ -372,17 +401,41 @@ function TaskRow({
   );
 }
 
+// Type guard: a stored details_json blob matches the ForYouItem shape if
+// it has the required fields. We don't bother validating every nested
+// field — the rendering tolerates missing optional ones.
+function asForYouItem(raw: unknown): ForYouItem | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (
+    typeof r.id !== "string" ||
+    typeof r.title !== "string" ||
+    typeof r.type !== "string" ||
+    typeof r.shortDescription !== "string" ||
+    typeof r.longDescription !== "string" ||
+    !Array.isArray(r.links)
+  ) {
+    return null;
+  }
+  return r as unknown as ForYouItem;
+}
+
 function TaskDetailPanel({
   task,
+  aiDetail,
   onClose,
   ref,
 }: {
   task: Task;
+  aiDetail?: AiWeekOneDetail;
   onClose: () => void;
   ref?: React.Ref<HTMLElement>;
 }) {
-  const guide = getTaskGuide(task);
+  const forYouSource = asForYouItem(task.detailsJson);
+  const guide = getTaskGuide(task, aiDetail);
   const done = task.status === "done";
+  const displayTitle = aiDetail?.titleOverride ?? task.title;
+  const displayDescription = aiDetail?.descriptionOverride ?? task.description;
 
   return (
     <aside
@@ -404,7 +457,7 @@ function TaskDetailPanel({
           <h2
             className={`text-xl font-semibold leading-tight ${done ? "line-through text-[var(--muted-foreground)]" : ""}`}
           >
-            {task.title}
+            {displayTitle}
           </h2>
         </div>
         <button
@@ -417,70 +470,149 @@ function TaskDetailPanel({
         </button>
       </div>
 
-      {task.description && (
-        <p className="text-[var(--muted-foreground)] mb-6">{task.description}</p>
+      {displayDescription && (
+        <p className="text-[var(--muted-foreground)] mb-4">{displayDescription}</p>
       )}
 
-      <ol className="space-y-4">
-        {guide.steps.map((step, idx) => (
-          <li
-            key={idx}
-            className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-4"
-          >
-            <div className="flex items-start gap-3">
-              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-foreground)] text-xs font-semibold">
-                {idx + 1}
-              </span>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-medium">{step.title}</h3>
-                {step.body && (
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                    {step.body}
-                  </p>
-                )}
-                {step.link && (
-                  <a
-                    href={step.link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-block text-sm text-[var(--accent)] hover:underline"
-                  >
-                    {step.link.label} →
-                  </a>
-                )}
-              </div>
+      {forYouSource ? (
+        <ForYouDetailBody item={forYouSource} />
+      ) : (
+        <>
+          {(guide.overview || guide.estimatedTime) && (
+            <div className="mb-6 rounded-xl bg-[var(--muted)] p-4">
+              {guide.estimatedTime && (
+                <p className="text-xs font-semibold uppercase tracking-widest text-[var(--muted-foreground)] mb-1">
+                  ⏱ {guide.estimatedTime}
+                </p>
+              )}
+              {guide.overview && <p className="text-sm">{guide.overview}</p>}
             </div>
-          </li>
-        ))}
-      </ol>
+          )}
 
-      {guide.resources && guide.resources.length > 0 && (
+          <ol className="space-y-4">
+            {guide.steps.map((step, idx) => (
+              <li
+                key={idx}
+                className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-4"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-foreground)] text-xs font-semibold">
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium">{step.title}</h3>
+                    {step.body && (
+                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                        {step.body}
+                      </p>
+                    )}
+                    {step.link && (
+                      <a
+                        href={step.link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-block text-sm text-[var(--accent)] hover:underline"
+                      >
+                        {step.link.label} →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          {guide.resources && guide.resources.length > 0 && (
+            <section className="mt-6">
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-[var(--muted-foreground)] mb-3">
+                Resources
+              </h3>
+              <ul className="space-y-2">
+                {guide.resources.map((r) => (
+                  <li key={r.url}>
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-[var(--accent)] hover:underline"
+                    >
+                      {r.label} →
+                    </a>
+                    {r.description && (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        {r.description}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
+
+    </aside>
+  );
+}
+
+// Renders the rich content the user already saw in the pre-move dropdown:
+// longDescription, meta chips, full link list. Used in place of the
+// static/AI guide when a task was created from a For You item.
+function ForYouDetailBody({ item }: { item: ForYouItem }) {
+  return (
+    <div>
+      <p className="text-sm leading-relaxed">{item.longDescription}</p>
+
+      {(item.meta?.cost ||
+        item.meta?.schedule ||
+        item.meta?.location ||
+        item.date) && (
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {item.date && (
+            <DetailChip label="When" value={item.date} />
+          )}
+          {item.meta?.cost && (
+            <DetailChip label="Cost" value={item.meta.cost} />
+          )}
+          {item.meta?.schedule && (
+            <DetailChip label="Schedule" value={item.meta.schedule} />
+          )}
+          {item.meta?.location && (
+            <DetailChip label="Where" value={item.meta.location} />
+          )}
+        </ul>
+      )}
+
+      {item.links.length > 0 && (
         <section className="mt-6">
           <h3 className="text-sm font-semibold uppercase tracking-widest text-[var(--muted-foreground)] mb-3">
-            Resources
+            Links
           </h3>
           <ul className="space-y-2">
-            {guide.resources.map((r) => (
-              <li key={r.url}>
+            {item.links.map((l) => (
+              <li key={l.url}>
                 <a
-                  href={r.url}
+                  href={l.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-[var(--accent)] hover:underline"
                 >
-                  {r.label} →
+                  {l.label} →
                 </a>
-                {r.description && (
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    {r.description}
-                  </p>
-                )}
               </li>
             ))}
           </ul>
         </section>
       )}
+    </div>
+  );
+}
 
-    </aside>
+function DetailChip({ label, value }: { label: string; value: string }) {
+  return (
+    <li className="inline-flex items-baseline gap-1 rounded-full bg-[var(--background)] border border-[var(--border)] px-2.5 py-0.5 text-xs">
+      <span className="text-[var(--muted-foreground)]">{label}:</span>
+      <span className="font-medium">{value}</span>
+    </li>
   );
 }

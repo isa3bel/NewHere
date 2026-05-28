@@ -6,6 +6,7 @@ export const mockProfile: Profile = {
   userId: MOCK_USER_ID,
   displayName: "Isabel",
   city: "Austin, TX",
+  neighborhood: null,
   moveDate: "2026-05-01",
   socialStyle: "ambivert",
   hasCar: true,
@@ -26,7 +27,7 @@ export const mockPlan: Plan = {
 // Meets PRD acceptance criterion: ≥5 / ≥8 / ≥8
 // keeperState + sourceItemId are defaulted at insert time so the seed
 // data doesn't need to repeat them on every entry.
-export const mockTasks: Omit<Task, "keeperState" | "sourceItemId">[] = [
+export const mockTasks: Omit<Task, "keeperState" | "sourceItemId" | "detailsJson">[] = [
   // -------- Week 1 (days 0–6): administrative + setup essentials --------
   {
     id: "w1-license",

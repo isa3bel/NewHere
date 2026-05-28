@@ -31,3 +31,29 @@ export async function requireUser(): Promise<SessionUser> {
   }
   return user;
 }
+
+// Comma-separated env var. Email match is the simplest source of truth
+// at MVP scale — no admin role column needed yet. Trim + lowercase so
+// stray whitespace or casing differences don't lock you out.
+function parseAdminEmails(): Set<string> {
+  const raw = process.env.ADMIN_EMAILS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+// Use in admin routes. Requires (a) a signed-in user AND (b) the user's
+// email to be in ADMIN_EMAILS. Anything else 404s — we don't reveal that
+// the route exists to non-admins.
+export async function requireAdmin(): Promise<SessionUser> {
+  const user = await requireUser();
+  const admins = parseAdminEmails();
+  if (!admins.has(user.email.toLowerCase())) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
+  return user;
+}

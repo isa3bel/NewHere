@@ -4,7 +4,12 @@ import type { Task } from "../lib/types";
 
 function withCompleted(ids: string[]): Task[] {
   return mockTasks.map((t) => {
-    const base: Task = { keeperState: "none", sourceItemId: null, ...t };
+    const base: Task = {
+      keeperState: "none",
+      sourceItemId: null,
+      detailsJson: null,
+      ...t,
+    };
     return ids.includes(t.id)
       ? { ...base, status: "done", completedAt: new Date().toISOString() }
       : base;

@@ -57,6 +57,7 @@ export default function SamplePage() {
       completedAt: isDone ? new Date().toISOString() : null,
       keeperState: isAnchor ? "keep" : "none",
       sourceItemId: null,
+      detailsJson: null,
     };
   });
 
@@ -110,6 +111,7 @@ export default function SamplePage() {
             todaysFocus={todaysFocus}
             currentDay={currentDay}
             preMoveSuggestions={[]}
+            weekOneOverlay={[]}
             city={sampleCity}
           />
         </div>

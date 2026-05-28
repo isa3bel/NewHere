@@ -25,6 +25,7 @@ type ProfileRow = {
   user_id: string;
   display_name: string | null;
   city: string;
+  neighborhood: string | null;
   move_date: string;
   social_style: Profile["socialStyle"];
   has_car: boolean;
@@ -58,6 +59,7 @@ type TaskRow = {
   is_recurring_activity: boolean;
   keeper_state: KeeperState;
   source_item_id: string | null;
+  details_json: unknown | null;
 };
 
 type BadgeRow = {
@@ -80,6 +82,9 @@ function rowToProfile(r: ProfileRow): Profile {
     userId: r.user_id,
     displayName: r.display_name,
     city: r.city,
+    // Defensive normalization: collapse empty/whitespace strings down to
+    // null so downstream code only has to handle the null case.
+    neighborhood: r.neighborhood?.trim() || null,
     moveDate: r.move_date,
     socialStyle: r.social_style,
     hasCar: r.has_car,
@@ -117,6 +122,7 @@ function rowToTask(r: TaskRow): Task {
     isRecurringActivity: r.is_recurring_activity,
     keeperState: r.keeper_state,
     sourceItemId: r.source_item_id,
+    detailsJson: r.details_json,
   };
 }
 
@@ -154,6 +160,7 @@ export async function upsertProfile(profile: Profile): Promise<Profile> {
       user_id: profile.userId,
       display_name: profile.displayName,
       city: profile.city,
+      neighborhood: profile.neighborhood,
       move_date: profile.moveDate,
       social_style: profile.socialStyle,
       has_car: profile.hasCar,
@@ -205,7 +212,10 @@ export async function ensurePlanForUser(userId: string): Promise<Plan> {
   }
   const plan = rowToPlan(planData as PlanRow);
 
-  // 2) Bulk insert 28 starter tasks
+  // 2) Bulk insert 28 starter tasks. We persist the mockTasks.id (e.g.
+  // "w1-license") as source_item_id so the slot is identifiable later
+  // — drives both the static task-guides lookup AND the AI overlay
+  // matching for city-specific content.
   const taskRows = mockTasks.map((mt) => ({
     plan_id: plan.id,
     user_id: userId,
@@ -219,6 +229,7 @@ export async function ensurePlanForUser(userId: string): Promise<Plan> {
     order_index: mt.orderIndex,
     is_event_attendance: mt.isEventAttendance,
     is_recurring_activity: mt.isRecurringActivity,
+    source_item_id: mt.id,
   }));
   const { error: tasksErr } = await supabase.from("tasks").insert(taskRows);
   if (tasksErr) {
@@ -288,12 +299,18 @@ export async function setTaskKeeperState(
 export async function resetPlanProgress(userId: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
 
-  // Delete any custom tasks created from For You items
+  // Delete any custom tasks created from For You items.
+  // Starter tasks now also carry source_item_id (e.g. "w1-license") so
+  // they can be looked up by slot. Filter those out by their known
+  // prefixes — only true For You tasks should be removed here.
   await supabase
     .from("tasks")
     .delete()
     .eq("user_id", userId)
-    .not("source_item_id", "is", null);
+    .not("source_item_id", "is", null)
+    .not("source_item_id", "like", "w1-%")
+    .not("source_item_id", "like", "m1-%")
+    .not("source_item_id", "like", "q1-%");
 
   // Reset remaining tasks' progress
   await supabase
@@ -422,6 +439,9 @@ export async function createTaskFromForYou(
       is_event_attendance: item.type === "event" || item.type === "class",
       is_recurring_activity: false,
       source_item_id: item.id,
+      // Persist the whole item so the detail panel can render the rich
+      // content the user already saw in the pre-move dropdown.
+      details_json: item,
     })
     .select()
     .single();

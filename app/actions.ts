@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { invalidateCachedSuggestions } from "@/lib/ai/cache";
 import { requireUser } from "@/lib/auth";
 import { CELEBRATION_COOKIE } from "@/lib/celebration";
 import {
@@ -29,10 +30,17 @@ import type {
 } from "@/lib/types";
 
 function readProfileFromForm(userId: string, formData: FormData): Profile {
+  // Cap at 80 chars server-side. Neighborhood is interpolated into the
+  // AI prompt, so a runaway value here would inflate cost and could be a
+  // mild prompt-injection vector. The form input also has maxLength, but
+  // never trust the client.
+  const neighborhoodRaw = (formData.get("neighborhood") as string) || "";
+  const neighborhood = neighborhoodRaw.trim().slice(0, 80) || null;
   return {
     userId,
     displayName: (formData.get("displayName") as string) || null,
     city: (formData.get("city") as string) || "",
+    neighborhood,
     moveDate: (formData.get("moveDate") as string) || "",
     socialStyle: (formData.get("socialStyle") as SocialStyle) || "ambivert",
     hasCar: formData.get("hasCar") === "on",
@@ -112,6 +120,18 @@ export async function deleteAccountAction() {
   await supabase.auth.signOut();
 
   redirect("/");
+}
+
+// "Refresh" on the pre-move suggestions block. Drops the cache so the
+// next page load regenerates fresh content. Rate-limited at the
+// generation layer (PER_USER_DAILY_GENERATION_LIMIT) — this action
+// itself just invalidates.
+export async function refreshAiSuggestionsAction(args: {
+  surface: "pre_move" | "month_1";
+}) {
+  const user = await requireUser();
+  await invalidateCachedSuggestions(user.id, args.surface);
+  revalidatePath("/plan");
 }
 
 // "+ Add to my plan" on a pre-move recommendation. Creates a task in the

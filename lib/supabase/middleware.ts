@@ -40,10 +40,13 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Auth-protected paths: must be signed in to access these.
+  // /admin/* is gated additionally by requireAdmin() in the route itself
+  // (email allowlist); middleware just forces a sign-in first.
   const requiresAuth =
     pathname.startsWith("/plan") ||
     pathname.startsWith("/profile") ||
-    pathname.startsWith("/onboarding");
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/admin");
 
   if (requiresAuth && !user) {
     const url = request.nextUrl.clone();

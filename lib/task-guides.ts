@@ -324,6 +324,21 @@ function genericGuide(task: Task): TaskGuide {
   };
 }
 
-export function getTaskGuide(task: Task): TaskGuide {
-  return GUIDES[task.id] ?? genericGuide(task);
+import type { AiWeekOneDetail } from "./ai/types";
+
+// Pick the right detail panel content for a task:
+//   1. AI overlay for this slot (city-specific) — preferred when present
+//   2. Hand-written static guide keyed by slot — fallback for known slots
+//   3. Generic placeholder — fallback for unknown slots / future tasks
+//
+// Slot key comes from source_item_id (set by ensurePlanForUser to the
+// mockTasks.id, e.g. "w1-license"). Older rows that predate this wiring
+// fall back to genericGuide via the missing-key path.
+export function getTaskGuide(
+  task: Task,
+  aiOverlay?: AiWeekOneDetail,
+): TaskGuide {
+  if (aiOverlay) return aiOverlay.guide;
+  const slot = task.sourceItemId ?? task.id;
+  return GUIDES[slot] ?? genericGuide(task);
 }

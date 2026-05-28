@@ -3,6 +3,10 @@ import Link from "next/link";
 import { dismissCelebrationAction } from "@/app/actions";
 import { PlanView } from "./PlanView";
 import type { PreMoveTile } from "./PlanView";
+import { getOrGeneratePreMoveSuggestions } from "@/lib/ai/generate-pre-move";
+import { getOrGenerateWeekOneOverlay } from "@/lib/ai/generate-week-one";
+import { toForYouItem } from "@/lib/ai/types";
+import type { AiWeekOneDetail } from "@/lib/ai/types";
 import { requireUser } from "@/lib/auth";
 import { readCelebrationBadgeIds } from "@/lib/celebration";
 import {
@@ -16,7 +20,6 @@ import {
   getTodaysFocus,
   moveSummary,
 } from "@/lib/plan-progress";
-import { generatePreMoveSuggestions } from "@/lib/pre-move-prep";
 import type { Badge } from "@/lib/types";
 
 export default async function PlanPage() {
@@ -63,16 +66,29 @@ export default async function PlanPage() {
     if (t.keeperState === "not_for_me") notForMeItemIds.add(t.sourceItemId);
   }
 
-  const preMoveSuggestions: PreMoveTile[] =
-    currentDay < 0
-      ? generatePreMoveSuggestions(profile)
-          .filter((s) => !notForMeItemIds.has(s.item.id))
-          .map((s) => ({
-            item: s.item,
-            interest: s.interest,
-            addedToPlan: inPlanItemIds.has(s.item.id),
-          }))
-      : [];
+  // Pre-move suggestions come from the AI cache layer. First call per
+  // (user, profile-fingerprint) generates (mock for now) and stores;
+  // subsequent loads are pure DB reads. Same shape as before so PlanView
+  // doesn't care that the source changed.
+  const aiSuggestions = profile && currentDay < 0
+    ? await getOrGeneratePreMoveSuggestions(user.id, profile)
+    : [];
+
+  const preMoveSuggestions: PreMoveTile[] = aiSuggestions
+    .filter((s) => !notForMeItemIds.has(s.id))
+    .map((s) => ({
+      item: toForYouItem(s),
+      interest: s.matchedInterest,
+      addedToPlan: inPlanItemIds.has(s.id),
+    }));
+
+  // Week 1 city-specific overlay. Cached per profile fingerprint;
+  // first load triggers a generation, subsequent loads are free reads.
+  // Empty array if profile is missing or AI failed — UI falls back to
+  // static guides.
+  const weekOneOverlay: AiWeekOneDetail[] = profile
+    ? await getOrGenerateWeekOneOverlay(user.id, profile)
+    : [];
 
   return (
     <main className="flex flex-col flex-1 items-center">
@@ -109,6 +125,7 @@ export default async function PlanPage() {
             todaysFocus={todaysFocus}
             currentDay={currentDay}
             preMoveSuggestions={preMoveSuggestions}
+            weekOneOverlay={weekOneOverlay}
             city={profile?.city ?? null}
           />
         </div>

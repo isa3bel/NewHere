@@ -69,6 +69,9 @@ export type Profile = {
   userId: string;
   displayName: string | null;
   city: string;
+  // Optional neighborhood within the city. When set, AI surfaces
+  // (e.g. Week 1 daily-shops) bias suggestions toward this neighborhood.
+  neighborhood: string | null;
   moveDate: string;
   socialStyle: SocialStyle;
   hasCar: boolean;
@@ -106,6 +109,12 @@ export type Task = {
   // Used to dedup "+ Add to plan" clicks and detect "is this item already
   // in the user's plan?"
   sourceItemId: string | null;
+  // Full source object captured at "Add to plan" time. For pre-move /
+  // For You-derived tasks this is the ForYouItem the user clicked on —
+  // letting the detail panel render the same rich content (long
+  // description, links, meta) the user already saw. Null for standard
+  // plan tasks.
+  detailsJson: unknown | null;
 };
 
 export type BadgeCriteria =
