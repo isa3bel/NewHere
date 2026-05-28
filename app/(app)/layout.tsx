@@ -34,6 +34,9 @@ export default async function AppLayout({
         <Link href="/profile" className="text-sm whitespace-nowrap">
           Profile
         </Link>
+        <Link href="/feedback" className="text-sm whitespace-nowrap">
+          Feedback
+        </Link>
       </div>
 
       <div className="flex-1 min-w-0">{children}</div>

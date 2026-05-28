@@ -15,6 +15,11 @@ export const USE_FAKE_AI = process.env.USE_FAKE_AI !== "false";
 // the account. Bump this up if it becomes a real-user pain point.
 export const PER_USER_DAILY_GENERATION_LIMIT = 5;
 
+// Admin users (matched via ADMIN_EMAILS env var) get a much higher
+// per-day cap so testing/iteration isn't blocked. Anthropic's
+// account-level spend cap is still the ultimate backstop.
+export const PER_ADMIN_DAILY_GENERATION_LIMIT = 50;
+
 // Model used when USE_FAKE_AI is false. Haiku is plenty for generating
 // suggestion-style content and ~3x cheaper than Sonnet.
 export const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";

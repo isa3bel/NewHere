@@ -1,6 +1,10 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
-import { estimateCostCents, PER_USER_DAILY_GENERATION_LIMIT } from "./config";
+import {
+  estimateCostCents,
+  PER_ADMIN_DAILY_GENERATION_LIMIT,
+  PER_USER_DAILY_GENERATION_LIMIT,
+} from "./config";
 import type { AiSurface } from "./types";
 
 // Records a row in ai_generations. Called on every call (including
@@ -53,24 +57,51 @@ export async function logAiGeneration(args: {
 //                        log rows) shouldn't make the user permanently
 //                        capped for the rest of the day
 //
-// Anthropic's account-level spend cap is the real safety net; this is
-// a per-user, per-day soft brake against a runaway client.
+// Admins (ADMIN_EMAILS) get a much higher cap so iteration isn't
+// blocked. Anthropic's account-level spend cap is the ultimate backstop.
 export async function isUnderDailyLimit(userId: string): Promise<boolean> {
   const admin = createSupabaseAdminClient();
   const since = new Date();
   since.setHours(0, 0, 0, 0);
-  const { count, error } = await admin
-    .from("ai_generations")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("cache_hit", false)
-    .eq("succeeded", true)
-    .neq("model", "mock")
-    .gte("created_at", since.toISOString());
-  if (error) {
+
+  const [countResult, isAdmin] = await Promise.all([
+    admin
+      .from("ai_generations")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("cache_hit", false)
+      .eq("succeeded", true)
+      .neq("model", "mock")
+      .gte("created_at", since.toISOString()),
+    isAdminUser(userId),
+  ]);
+
+  if (countResult.error) {
     // On error, fail open — better to allow a generation than to
     // accidentally block all users because of a transient DB issue.
     return true;
   }
-  return (count ?? 0) < PER_USER_DAILY_GENERATION_LIMIT;
+  const limit = isAdmin
+    ? PER_ADMIN_DAILY_GENERATION_LIMIT
+    : PER_USER_DAILY_GENERATION_LIMIT;
+  return (countResult.count ?? 0) < limit;
+}
+
+// Looks up the user's email and matches against ADMIN_EMAILS. Returns
+// false on any error (fail closed: an unknown user gets the strict
+// real-user cap, not the admin cap).
+async function isAdminUser(userId: string): Promise<boolean> {
+  const raw = process.env.ADMIN_EMAILS ?? "";
+  const admins = new Set(
+    raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+  );
+  if (admins.size === 0) return false;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error || !data?.user?.email) return false;
+    return admins.has(data.user.email.toLowerCase());
+  } catch {
+    return false;
+  }
 }

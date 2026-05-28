@@ -12,6 +12,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { href: "/plan", label: "NewHere Plan", icon: "📋" },
   { href: "/profile", label: "Profile", icon: "👤" },
+  { href: "/feedback", label: "Send feedback", icon: "💬" },
 ];
 
 export function Sidebar() {

@@ -8,7 +8,7 @@ import { readCachedSuggestions, writeCachedSuggestions } from "./cache";
 import { ANTHROPIC_MODEL, USE_FAKE_AI } from "./config";
 import { profileFingerprint } from "./fingerprint";
 import { stripCitations } from "./sanitize";
-import type { AiSuggestion, GenerationResult } from "./types";
+import type { AiSuggestion, GenerationResult, SurfaceResult } from "./types";
 import { isUnderDailyLimit, logAiGeneration } from "./usage-log";
 
 // ============================================================
@@ -16,12 +16,16 @@ import { isUnderDailyLimit, logAiGeneration } from "./usage-log";
 // ============================================================
 
 // Top-level entry: check cache → generate → log → persist.
-// Returns [] on any failure (logged in ai_generations as succeeded=false).
+// status='failed' tells the caller AI broke for this load so it can
+// render a friendly banner. data is always safe to render directly.
 export async function getOrGeneratePreMoveSuggestions(
   userId: string,
   profile: Profile,
-): Promise<AiSuggestion[]> {
-  if ((profile.interests ?? []).length === 0) return [];
+): Promise<SurfaceResult<AiSuggestion[]>> {
+  if ((profile.interests ?? []).length === 0) {
+    // No interests is a legitimate empty state, not an AI failure.
+    return { status: "ok", data: [] };
+  }
 
   const surface = "pre_move" as const;
   const fingerprint = profileFingerprint(profile, surface);
@@ -38,7 +42,7 @@ export async function getOrGeneratePreMoveSuggestions(
       searchCount: 0,
       succeeded: true,
     });
-    return cached.content;
+    return { status: "ok", data: cached.content };
   }
 
   if (!(await isUnderDailyLimit(userId))) {
@@ -53,7 +57,7 @@ export async function getOrGeneratePreMoveSuggestions(
       succeeded: false,
       errorMessage: "per_user_daily_limit_exceeded",
     });
-    return [];
+    return { status: "failed", data: [] };
   }
 
   try {
@@ -78,7 +82,7 @@ export async function getOrGeneratePreMoveSuggestions(
       searchCount: result.meta.searchCount,
       succeeded: true,
     });
-    return result.suggestions;
+    return { status: "ok", data: result.suggestions };
   } catch (err) {
     await logAiGeneration({
       userId,
@@ -91,7 +95,7 @@ export async function getOrGeneratePreMoveSuggestions(
       succeeded: false,
       errorMessage: err instanceof Error ? err.message : String(err),
     });
-    return [];
+    return { status: "failed", data: [] };
   }
 }
 

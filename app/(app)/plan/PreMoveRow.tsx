@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 
 import { addForYouToPlanAction } from "@/app/actions";
+import { uniqByUrl } from "@/lib/ai/sanitize";
 import type { ForYouItem } from "@/lib/for-you-data";
 
 type Props = {
@@ -106,7 +107,7 @@ export function PreMoveRow({ item, interest, addedToPlan }: Props) {
 
           {item.links.length > 0 && (
             <ul className="mt-3 space-y-1.5">
-              {item.links.map((l) => (
+              {uniqByUrl(item.links).map((l) => (
                 <li key={l.url}>
                   <a
                     href={l.url}

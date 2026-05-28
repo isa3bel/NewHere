@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { dismissCelebrationAction } from "@/app/actions";
 
+import { AiFailureBanner } from "./AiFailureBanner";
+
 // Vercel default function timeout is 10s on Hobby, 15s on Pro. Real
 // Claude calls with web_search routinely take 15–30s, so we bump it.
 // 60s is the Hobby ceiling; Pro can go higher. Per Next.js docs this
@@ -13,7 +15,7 @@ import type { PreMoveTile } from "./PlanView";
 import { getOrGeneratePreMoveSuggestions } from "@/lib/ai/generate-pre-move";
 import { getOrGenerateWeekOneOverlay } from "@/lib/ai/generate-week-one";
 import { toForYouItem } from "@/lib/ai/types";
-import type { AiWeekOneDetail } from "@/lib/ai/types";
+import type { AiSuggestion, AiWeekOneDetail } from "@/lib/ai/types";
 import { requireUser } from "@/lib/auth";
 import { readCelebrationBadgeIds } from "@/lib/celebration";
 import {
@@ -77,18 +79,23 @@ export default async function PlanPage() {
   // max(pre_move, week_one) rather than their sum. Cache hits return
   // ~instantly; cold misses are the slow case where parallelism matters.
   // Each call is independent — no shared state, no dependency.
-  const [aiSuggestions, weekOneOverlay] = await Promise.all([
+  const [preMoveResult, weekOneResult] = await Promise.all([
     profile && currentDay < 0
       ? getOrGeneratePreMoveSuggestions(user.id, profile)
-      : Promise.resolve([] as Awaited<
-          ReturnType<typeof getOrGeneratePreMoveSuggestions>
-        >),
+      : Promise.resolve({ status: "ok", data: [] as AiSuggestion[] } as const),
     profile
       ? getOrGenerateWeekOneOverlay(user.id, profile)
-      : Promise.resolve([] as AiWeekOneDetail[]),
+      : Promise.resolve({
+          status: "ok",
+          data: [] as AiWeekOneDetail[],
+        } as const),
   ]);
 
-  const preMoveSuggestions: PreMoveTile[] = aiSuggestions
+  const aiFailed =
+    preMoveResult.status === "failed" || weekOneResult.status === "failed";
+  const weekOneOverlay = weekOneResult.data;
+
+  const preMoveSuggestions: PreMoveTile[] = preMoveResult.data
     .filter((s) => !notForMeItemIds.has(s.id))
     .map((s) => ({
       item: toForYouItem(s),
@@ -120,6 +127,8 @@ export default async function PlanPage() {
             · {summary.detail}
           </p>
         </header>
+
+        {aiFailed && <AiFailureBanner />}
 
         {celebratingBadges.length > 0 && (
           <CelebrationBanner badges={celebratingBadges} />

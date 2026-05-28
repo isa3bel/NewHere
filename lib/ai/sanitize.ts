@@ -19,3 +19,18 @@ export function stripCitationsOptional(
 ): string | undefined {
   return text === undefined ? undefined : stripCitations(text);
 }
+
+// Removes items with duplicate `url` from a list. The model occasionally
+// returns the same URL twice (different labels, sometimes identical) —
+// rendering both causes React key collisions and shows the user a
+// confusing duplicate row. First occurrence wins.
+export function uniqByUrl<T extends { url: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    if (seen.has(item.url)) continue;
+    seen.add(item.url);
+    out.push(item);
+  }
+  return out;
+}

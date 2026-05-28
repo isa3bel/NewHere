@@ -10,6 +10,7 @@ import type {
   AiSuggestion,
   AiWeekOneDetail,
   GenerationResult,
+  SurfaceResult,
 } from "./types";
 import { isUnderDailyLimit, logAiGeneration } from "./usage-log";
 
@@ -18,12 +19,13 @@ import { isUnderDailyLimit, logAiGeneration } from "./usage-log";
 // ============================================================
 
 // Returns city-specific overlays for the 8 Week 1 essentials,
-// keyed by slot key. Empty array on failure (logged in ai_generations).
+// keyed by slot key. status='failed' lets the page render a banner
+// when AI broke; data is always safe to use.
 // Cache key: (user_id, "week_one", profile_hash).
 export async function getOrGenerateWeekOneOverlay(
   userId: string,
   profile: Profile,
-): Promise<AiWeekOneDetail[]> {
+): Promise<SurfaceResult<AiWeekOneDetail[]>> {
   const surface = "week_one" as const;
   const fingerprint = profileFingerprint(profile, surface);
 
@@ -42,7 +44,10 @@ export async function getOrGenerateWeekOneOverlay(
     // We stored an AiSuggestion[]-typed content column, but for week_one
     // the JSON is AiWeekOneDetail[]. The cache table is intentionally
     // type-loose (jsonb).
-    return cached.content as unknown as AiWeekOneDetail[];
+    return {
+      status: "ok",
+      data: cached.content as unknown as AiWeekOneDetail[],
+    };
   }
 
   if (!(await isUnderDailyLimit(userId))) {
@@ -57,7 +62,7 @@ export async function getOrGenerateWeekOneOverlay(
       succeeded: false,
       errorMessage: "per_user_daily_limit_exceeded",
     });
-    return [];
+    return { status: "failed", data: [] };
   }
 
   try {
@@ -83,7 +88,7 @@ export async function getOrGenerateWeekOneOverlay(
       searchCount: result.meta.searchCount,
       succeeded: true,
     });
-    return result.overlay;
+    return { status: "ok", data: result.overlay };
   } catch (err) {
     await logAiGeneration({
       userId,
@@ -96,7 +101,7 @@ export async function getOrGenerateWeekOneOverlay(
       succeeded: false,
       errorMessage: err instanceof Error ? err.message : String(err),
     });
-    return [];
+    return { status: "failed", data: [] };
   }
 }
 

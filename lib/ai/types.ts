@@ -47,6 +47,15 @@ export type GenerationResult = {
 // AI-backed surface (month_1, deepening:<anchorId>, etc.).
 export type AiSurface = "pre_move" | "week_one" | "month_1";
 
+// Return shape from the top-level surface fetchers. `status` lets the
+// caller distinguish between "AI succeeded (with possibly empty results)"
+// and "AI failed and we fell back to empty" — without it the page can't
+// tell whether to show a failure banner. `data` is what gets rendered.
+export type SurfaceResult<T> = {
+  status: "ok" | "failed";
+  data: T;
+};
+
 // ============================================================
 // Week 1 "Land & settle" overlay shape
 // ============================================================

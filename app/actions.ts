@@ -103,6 +103,48 @@ export async function dismissCelebrationAction() {
   revalidatePath("/plan");
 }
 
+export type FeedbackCategory = "bug" | "suggestion" | "general";
+
+export type SubmitFeedbackResult =
+  | { status: "ok" }
+  | { status: "error"; message: string };
+
+// Records a feedback row from /feedback. Auth-only — user_id is taken
+// from the session and email is snapshotted at submit time so
+// downstream account-deletion doesn't erase the report's context.
+export async function submitFeedbackAction(
+  _prev: SubmitFeedbackResult | null,
+  formData: FormData,
+): Promise<SubmitFeedbackResult> {
+  const user = await requireUser();
+  const category = formData.get("category") as FeedbackCategory | null;
+  const message = ((formData.get("message") as string) || "").trim();
+  const context = ((formData.get("context") as string) || "").trim() || null;
+
+  if (!category || !["bug", "suggestion", "general"].includes(category)) {
+    return { status: "error", message: "Pick a category." };
+  }
+  if (message.length < 4) {
+    return { status: "error", message: "Tell us a bit more (min ~4 chars)." };
+  }
+  if (message.length > 4000) {
+    return { status: "error", message: "Keep it under 4000 characters." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("feedback").insert({
+    user_id: user.id,
+    user_email: user.email,
+    category,
+    message,
+    context: context ? context.slice(0, 500) : null,
+  });
+  if (error) {
+    return { status: "error", message: `Submit failed: ${error.message}` };
+  }
+  return { status: "ok" };
+}
+
 // Permanently delete the signed-in user and all their data. The auth.users
 // row deletion cascades through profiles → plans → tasks → user_badges via
 // `on delete cascade` foreign keys in the schema.

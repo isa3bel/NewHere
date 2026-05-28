@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { toggleTaskAction } from "@/app/actions";
+import { uniqByUrl } from "@/lib/ai/sanitize";
 import type { AiWeekOneDetail } from "@/lib/ai/types";
 import type { ForYouItem } from "@/lib/for-you-data";
 import { getTaskGuide } from "@/lib/task-guides";
@@ -528,7 +529,7 @@ function TaskDetailPanel({
                 Resources
               </h3>
               <ul className="space-y-2">
-                {guide.resources.map((r) => (
+                {uniqByUrl(guide.resources).map((r) => (
                   <li key={r.url}>
                     <a
                       href={r.url}
@@ -589,7 +590,7 @@ function ForYouDetailBody({ item }: { item: ForYouItem }) {
             Links
           </h3>
           <ul className="space-y-2">
-            {item.links.map((l) => (
+            {uniqByUrl(item.links).map((l) => (
               <li key={l.url}>
                 <a
                   href={l.url}

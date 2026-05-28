@@ -46,6 +46,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/plan") ||
     pathname.startsWith("/profile") ||
     pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/feedback") ||
     pathname.startsWith("/admin");
 
   if (requiresAuth && !user) {
