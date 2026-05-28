@@ -18,7 +18,15 @@ export default async function OnboardingPage() {
         >
           ← Back
         </Link>
-        <h1 className="text-3xl font-semibold tracking-tight mt-6">
+        <div className="mt-6 mb-6 rounded-xl border border-[var(--accent)]/40 bg-[var(--accent)]/5 px-4 py-3 text-sm">
+          <p>
+            <span className="font-semibold">Private beta.</span> Some rough
+            edges. If anything breaks or feels off, send a note via{" "}
+            <span className="font-medium">💬 Send feedback</span> in the
+            sidebar — we read everything.
+          </p>
+        </div>
+        <h1 className="text-3xl font-semibold tracking-tight mt-2">
           Tell us about your move
         </h1>
         <p className="mt-2 text-[var(--muted-foreground)]">

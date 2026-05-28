@@ -74,8 +74,9 @@ export default function SamplePage() {
       <div className="w-full bg-[var(--accent)] text-[var(--accent-foreground)]">
         <div className="max-w-6xl mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-medium">
-            👀 This is a sample plan for a fictional user in Austin. Sign up
-            to generate your own.
+            ✨ <strong>This is what your plan will look like.</strong> Real
+            AI personalizes everything below for your city —{" "}
+            <span className="opacity-90">try it free with your own city.</span>
           </p>
           <div className="flex items-center gap-3">
             <Link
