@@ -9,6 +9,8 @@ import {
 } from "@/lib/plan-progress";
 import type { Task } from "@/lib/types";
 
+import { SAMPLE_AUSTIN_WEEK_ONE } from "./sample-week-one";
+
 // Public, no-auth sample of what a personalized NewHere plan looks like.
 // Uses the static mock task data, hard-coded "Austin, mid-Month-1" persona,
 // and a couple of anchors so the Routine / calendar surfaces are populated.
@@ -56,7 +58,10 @@ export default function SamplePage() {
       status: isDone ? "done" : "pending",
       completedAt: isDone ? new Date().toISOString() : null,
       keeperState: isAnchor ? "keep" : "none",
-      sourceItemId: null,
+      // Carry the slot key so the AI-shaped Week 1 overlay matches.
+      // The sample never writes to the DB, so the unique-by-source_item_id
+      // constraint isn't a concern.
+      sourceItemId: mt.id,
       detailsJson: null,
     };
   });
@@ -111,7 +116,7 @@ export default function SamplePage() {
             todaysFocus={todaysFocus}
             currentDay={currentDay}
             preMoveSuggestions={[]}
-            weekOneOverlay={[]}
+            weekOneOverlay={SAMPLE_AUSTIN_WEEK_ONE}
             city={sampleCity}
           />
         </div>
