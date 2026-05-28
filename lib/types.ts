@@ -41,8 +41,8 @@ export const PHASE_RANGES: Record<
     start: 30,
     end: 89,
     label: "Quarter 1",
-    stage: "Build your routine",
-    stageBlurb: "Double down on what stuck. Drop what didn't.",
+    stage: "Your routine",
+    stageBlurb: "What your week could look like, based on what you've kept.",
   },
 };
 

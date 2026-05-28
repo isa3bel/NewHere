@@ -1,4 +1,5 @@
 import { evaluateBadges } from "./badges";
+import { getDeepeningTemplates } from "./deepening-catalog";
 import type { ForYouItem } from "./for-you-data";
 import { mockTasks } from "./mock-data";
 import { createSupabaseAdminClient } from "./supabase/admin";
@@ -428,4 +429,58 @@ export async function createTaskFromForYou(
     throw new Error(`createTaskFromForYou failed: ${error?.message}`);
   }
   return rowToTask(data as TaskRow);
+}
+
+// ============================================================
+// Deepening tasks (anchor → Quarter 1 "Go deeper" content)
+// ============================================================
+
+// When a user marks a task as Keep, insert the static deepening templates
+// for that anchor into their Quarter 1 plan. Idempotent — checks for
+// existing deepening tasks with the same anchor before inserting, so
+// calling twice (or un-keeping and re-keeping) won't duplicate.
+//
+// source_item_id encodes the anchor source: `deepen:{anchorId}:{idx}`.
+// This (a) makes deepening tasks identifiable on the plan page, (b) lets
+// the unique partial index on (user_id, source_item_id) enforce dedup
+// at the database level as well.
+export async function ensureDeepeningTasksForAnchor(
+  userId: string,
+  anchor: Task,
+): Promise<void> {
+  const templates = getDeepeningTemplates(anchor.title);
+  if (templates.length === 0) return;
+
+  const supabase = await createSupabaseServerClient();
+
+  // Skip if we already generated deepening tasks for this anchor.
+  const { data: existing } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("user_id", userId)
+    .like("source_item_id", `deepen:${anchor.id}:%`)
+    .limit(1);
+  if (existing && existing.length > 0) return;
+
+  const rows = templates.map((t, idx) => ({
+    plan_id: anchor.planId,
+    user_id: userId,
+    category: t.category,
+    phase: "quarter_one" as const,
+    title: t.title,
+    description: t.description,
+    day_offset: t.dayOffset,
+    link_url: null,
+    status: "pending" as TaskStatus,
+    order_index: idx,
+    is_event_attendance: t.isEventAttendance,
+    is_recurring_activity: t.isRecurringActivity,
+    keeper_state: "none" as const,
+    source_item_id: `deepen:${anchor.id}:${idx}`,
+  }));
+
+  const { error } = await supabase.from("tasks").insert(rows);
+  if (error) {
+    throw new Error(`ensureDeepeningTasksForAnchor failed: ${error.message}`);
+  }
 }

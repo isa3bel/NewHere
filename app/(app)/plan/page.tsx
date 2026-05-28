@@ -3,7 +3,6 @@ import Link from "next/link";
 import { dismissCelebrationAction } from "@/app/actions";
 import { PlanView } from "./PlanView";
 import type { PreMoveTile } from "./PlanView";
-import { YourWeek } from "./YourWeek";
 import { requireUser } from "@/lib/auth";
 import { readCelebrationBadgeIds } from "@/lib/celebration";
 import {
@@ -48,7 +47,6 @@ export default async function PlanPage() {
   }
 
   const tasks = await getTasksForPlan(plan.id);
-  const anchors = tasks.filter((t) => t.keeperState === "keep");
 
   const celebrationIds = await readCelebrationBadgeIds();
   const celebratingBadges = badges.filter((b) => celebrationIds.includes(b.id));
@@ -104,13 +102,6 @@ export default async function PlanPage() {
         {celebratingBadges.length > 0 && (
           <CelebrationBanner badges={celebratingBadges} />
         )}
-
-        <YourWeek
-          tasks={tasks}
-          anchors={anchors}
-          moveDate={profile?.moveDate ?? ""}
-          currentDay={currentDay}
-        />
 
         <div className="mt-10">
           <PlanView

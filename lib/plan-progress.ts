@@ -87,8 +87,8 @@ export function moveSummary(currentDay: number): {
   }
   if (currentDay <= 89) {
     return {
-      headline: `Day ${currentDay + 1} · Build your routine`,
-      detail: "Double down on what stuck. Drop what didn't.",
+      headline: `Day ${currentDay + 1} · Your routine`,
+      detail: "Your week, shaped by what you've kept.",
     };
   }
   return {

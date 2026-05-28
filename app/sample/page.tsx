@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { PlanView } from "@/app/(app)/plan/PlanView";
-import { YourWeek } from "@/app/(app)/plan/YourWeek";
 import { mockTasks } from "@/lib/mock-data";
 import {
   daysSinceMove,
@@ -18,20 +17,19 @@ import type { Task } from "@/lib/types";
 // underlying server actions require auth — clicking them bounces the user
 // to /sign-in, which is fine UX for a sample.
 export default function SamplePage() {
-  // Construct a sample profile state: Austin, moved 14 days ago.
-  const fourteenDaysAgoIso = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 14);
-    return d.toISOString().slice(0, 10);
-  })();
+  // Construct a sample profile state: Austin, moved today (Day 1).
+  // Day 1 means Week 1 ("Land & settle") is the current phase and
+  // shows expanded by default.
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   const sampleCity = "Austin, TX";
-  const sampleMoveDate = fourteenDaysAgoIso;
+  const sampleMoveDate = todayIso;
   const currentDay = daysSinceMove(sampleMoveDate);
   const summary = moveSummary(currentDay);
 
   // Build sample tasks from the mock starter plan. Mark a handful as done,
-  // and promote two to anchors so "Your routine" + Every Week have content.
+  // and promote four to anchors so all four routine slots are populated
+  // (weekday morning, weekday evening, weekend morning, weekend evening).
   const DONE_IDS = new Set([
     "w1-license",
     "w1-utilities",
@@ -39,8 +37,15 @@ export default function SamplePage() {
     "w1-health",
     "m1-coffee-regular",
     "m1-grocery-routine",
+    "m1-climbing-gym",
+    "m1-new-cuisine",
   ]);
-  const ANCHOR_IDS = new Set(["m1-coffee-regular", "m1-grocery-routine"]);
+  const ANCHOR_IDS = new Set([
+    "m1-coffee-regular",    // → Weekday mornings
+    "m1-climbing-gym",      // → Weekday evenings
+    "m1-grocery-routine",   // → Weekend mornings
+    "m1-new-cuisine",       // → Weekend afternoons / evenings
+  ]);
 
   const tasks: Task[] = mockTasks.map((mt) => {
     const isDone = DONE_IDS.has(mt.id);
@@ -56,7 +61,6 @@ export default function SamplePage() {
   });
 
   const todaysFocus = getTodaysFocus(tasks, currentDay);
-  const anchors = tasks.filter((t) => t.keeperState === "keep");
 
   return (
     <main className="flex flex-col flex-1 items-center">
@@ -99,13 +103,6 @@ export default function SamplePage() {
             · {summary.detail}
           </p>
         </header>
-
-        <YourWeek
-          tasks={tasks}
-          anchors={anchors}
-          moveDate={sampleMoveDate}
-          currentDay={currentDay}
-        />
 
         <div className="mt-10">
           <PlanView

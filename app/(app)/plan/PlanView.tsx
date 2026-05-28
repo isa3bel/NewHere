@@ -11,7 +11,9 @@ import { PHASE_RANGES } from "@/lib/types";
 import type { Phase, Task, TaskCategory } from "@/lib/types";
 
 import { KeeperPrompt } from "./KeeperPrompt";
+import { Month1Section } from "./Month1Section";
 import { PreMoveRow } from "./PreMoveRow";
+import { Quarter1Section } from "./Quarter1Section";
 
 export type PreMoveTile = {
   item: ForYouItem;
@@ -62,6 +64,26 @@ export function PlanView({
   const isPreMove = currentDay < 0;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+
+  // Phases the user has manually collapsed. We seed it with any past
+  // phases so they're hidden by default (e.g. once you're past Week 1,
+  // "Land & settle" collapses). The user can still click to expand it.
+  // Lazy initializer so this runs once on mount, not every render.
+  const [collapsedPhases, setCollapsedPhases] = useState<Set<Phase>>(() => {
+    const initial = new Set<Phase>();
+    for (const phase of PHASE_ORDER) {
+      if (phaseStatus(phase, currentDay) === "past") initial.add(phase);
+    }
+    return initial;
+  });
+  const togglePhase = (phase: Phase) => {
+    setCollapsedPhases((prev) => {
+      const next = new Set(prev);
+      if (next.has(phase)) next.delete(phase);
+      else next.add(phase);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (selectedId && panelRef.current) {
@@ -168,44 +190,76 @@ export function PlanView({
         <div className="space-y-12">
           {PHASE_ORDER.map((phase) => {
             const phaseTasks = phaseBuckets[phase];
-            if (phaseTasks.length === 0) return null;
+            // quarter_one (Your routine) always renders — it derives from
+            // anchors anywhere in the plan, not from its own tasks. Other
+            // phases hide if empty.
+            if (phase !== "quarter_one" && phaseTasks.length === 0) return null;
             const phaseDone = phaseTasks.filter((t) => t.status === "done").length;
             const range = PHASE_RANGES[phase];
             const status = phaseStatus(phase, currentDay);
             const statusStyle = PHASE_STATUS_STYLES[status];
+            const collapsed = collapsedPhases.has(phase);
             return (
               <section key={phase}>
-                <div className="flex items-baseline justify-between mb-1 gap-3 flex-wrap">
-                  <div className="flex items-baseline gap-3 flex-wrap">
-                    <h2 className="text-xl font-semibold">{range.stage}</h2>
-                    <span className="text-xs text-[var(--muted-foreground)] uppercase tracking-widest">
-                      {range.label}
-                    </span>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusStyle.className}`}
-                    >
-                      {statusStyle.label}
-                    </span>
+                <button
+                  type="button"
+                  onClick={() => togglePhase(phase)}
+                  className="w-full text-left group"
+                  aria-expanded={!collapsed}
+                >
+                  <div className="flex items-baseline justify-between mb-1 gap-3 flex-wrap">
+                    <div className="flex items-baseline gap-3 flex-wrap">
+                      <span
+                        className={`text-[var(--muted-foreground)] text-sm transition group-hover:text-[var(--foreground)] ${
+                          collapsed ? "" : "rotate-90"
+                        } inline-block`}
+                        aria-hidden
+                      >
+                        ▸
+                      </span>
+                      <h2 className="text-xl font-semibold">{range.stage}</h2>
+                      <span className="text-xs text-[var(--muted-foreground)] uppercase tracking-widest">
+                        {range.label}
+                      </span>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusStyle.className}`}
+                      >
+                        {statusStyle.label}
+                      </span>
+                    </div>
+                    {phase !== "quarter_one" && (
+                      <span className="text-sm text-[var(--muted-foreground)]">
+                        {phaseDone} / {phaseTasks.length} done
+                      </span>
+                    )}
                   </div>
-                  <span className="text-sm text-[var(--muted-foreground)]">
-                    {phaseDone} / {phaseTasks.length} done
-                  </span>
-                </div>
-                <p className="text-sm text-[var(--muted-foreground)] mb-4">
-                  {range.stageBlurb} · Days {range.start + 1}–{range.end + 1}
-                </p>
-                <ul className="space-y-3">
-                  {phaseTasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      isSelected={task.id === selectedId}
-                      onSelect={() => setSelectedId(task.id)}
-                      muted={status === "past" && task.status !== "done"}
-                      focus={focusIds.has(task.id)}
+                  <p className="text-sm text-[var(--muted-foreground)] mb-4">
+                    {range.stageBlurb} · Days {range.start + 1}–{range.end + 1}
+                  </p>
+                </button>
+                {!collapsed &&
+                  (phase === "month_one" ? (
+                    <Month1Section tasks={phaseTasks} focusIds={focusIds} />
+                  ) : phase === "quarter_one" ? (
+                    <Quarter1Section
+                      tasks={phaseTasks}
+                      allTasks={tasks}
+                      focusIds={focusIds}
                     />
+                  ) : (
+                    <ul className="space-y-3">
+                      {phaseTasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          isSelected={task.id === selectedId}
+                          onSelect={() => setSelectedId(task.id)}
+                          muted={status === "past" && task.status !== "done"}
+                          focus={focusIds.has(task.id)}
+                        />
+                      ))}
+                    </ul>
                   ))}
-                </ul>
               </section>
             );
           })}
