@@ -10,9 +10,10 @@ export const USE_FAKE_AI = process.env.USE_FAKE_AI !== "false";
 // Hard ceiling on how many regenerations a single user can trigger
 // per day. Independent of Anthropic's account-level spend cap — this
 // catches a runaway client loop before it ever reaches the API.
-// Higher during development so iterating isn't blocked; tighten this
-// (e.g. back down to ~5) before opening to real users.
-export const PER_USER_DAILY_GENERATION_LIMIT = 25;
+// At 5/day a real user has plenty of headroom for normal use
+// (onboarding + a couple of profile edits), but a runaway can't drain
+// the account. Bump this up if it becomes a real-user pain point.
+export const PER_USER_DAILY_GENERATION_LIMIT = 5;
 
 // Model used when USE_FAKE_AI is false. Haiku is plenty for generating
 // suggestion-style content and ~3x cheaper than Sonnet.

@@ -1,33 +1,16 @@
 -- ============================================================
 -- NewHere MVP — initial schema
 -- ============================================================
--- Apply via Supabase SQL editor, or `supabase db push` if you
--- set up the CLI later. Safe to run on a fresh project; also
--- safe to re-run during setup — the "fresh reset" block below
--- drops + recreates everything so partial state from a prior
--- run can't cause "type already exists" errors.
+-- Apply once via Supabase SQL editor, or `supabase db push` if you
+-- set up the CLI later. This migration is run-once: subsequent
+-- schema changes ship as new 000N_*.sql files alongside.
+--
+-- The earlier "fresh reset" block that drop-and-recreated tables
+-- was removed pre-launch — re-running this file against a database
+-- with real users would have wiped their data. If you need a clean
+-- slate during development, drop tables manually with explicit SQL
+-- you write at the time.
 -- ============================================================
-
--- ------------------------------------------------------------
--- Fresh reset (idempotent setup)
--- ------------------------------------------------------------
--- WARNING: this drops the app's tables. Safe pre-launch (no real
--- user data yet). Remove this block before applying any migration
--- against a production database with real users.
-drop table if exists user_badges cascade;
-drop table if exists badges      cascade;
-drop table if exists tasks       cascade;
-drop table if exists plans       cascade;
-drop table if exists profiles    cascade;
-
-drop function if exists set_updated_at() cascade;
-
-drop type if exists keeper_state;
-drop type if exists task_phase;
-drop type if exists task_status;
-drop type if exists task_category;
-drop type if exists budget_tier;
-drop type if exists social_style;
 
 -- ------------------------------------------------------------
 -- Extensions
