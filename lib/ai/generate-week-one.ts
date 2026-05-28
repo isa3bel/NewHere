@@ -190,7 +190,7 @@ The 8 slots are FIXED. You MUST return exactly these slotKey values, one entry e
 - "w1-daily-shops"  → grocery chains, hardware, pharmacy in this city
 - "w1-home-safety"  → smoke/CO detectors, water shutoff, electrical panel (generic)
 
-You have web search. USE IT on the city-dependent slots — license/registration (state DMV), utilities (local providers), library system, transit (subway/bus card name), grocery chains. Skip search on the generic ones (home-safety, address) — they don't need it.
+You have web search but you MUST stay under 4 total searches. Budget them on the highest-leverage city-dependent slots first — transit (the card name), utilities (provider names), library (system name), license/registration (state DMV). Do not search for "w1-address" or "w1-home-safety" (generic). Use general knowledge for "w1-health" and "w1-daily-shops" unless a single targeted search gives a clearly better answer.
 
 When a neighborhood is provided in the user message, BIAS the "w1-daily-shops" slot toward that specific neighborhood — name the closest grocery, hardware store, and coffee shop within or adjacent to that neighborhood. For these neighborhood-specific picks, include a Google Maps deep-link in resources or step links so the user can find the spot on a map. Format: \`https://www.google.com/maps/search/<url-encoded-query>\` — e.g. \`https://www.google.com/maps/search/Trader+Joe%27s+Mission+District+San+Francisco\`. You can also use this format for transit stops, library branches, etc. when neighborhood is known.
 
@@ -275,7 +275,7 @@ async function callClaudeForWeekOne(
       {
         type: "web_search_20250305",
         name: "web_search",
-        max_uses: 6,
+        max_uses: 4,
       },
     ],
   });

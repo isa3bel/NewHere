@@ -73,13 +73,20 @@ export default async function PlanPage() {
     if (t.keeperState === "not_for_me") notForMeItemIds.add(t.sourceItemId);
   }
 
-  // Pre-move suggestions come from the AI cache layer. First call per
-  // (user, profile-fingerprint) generates (mock for now) and stores;
-  // subsequent loads are pure DB reads. Same shape as before so PlanView
-  // doesn't care that the source changed.
-  const aiSuggestions = profile && currentDay < 0
-    ? await getOrGeneratePreMoveSuggestions(user.id, profile)
-    : [];
+  // Both AI surfaces in parallel so the page render time is
+  // max(pre_move, week_one) rather than their sum. Cache hits return
+  // ~instantly; cold misses are the slow case where parallelism matters.
+  // Each call is independent — no shared state, no dependency.
+  const [aiSuggestions, weekOneOverlay] = await Promise.all([
+    profile && currentDay < 0
+      ? getOrGeneratePreMoveSuggestions(user.id, profile)
+      : Promise.resolve([] as Awaited<
+          ReturnType<typeof getOrGeneratePreMoveSuggestions>
+        >),
+    profile
+      ? getOrGenerateWeekOneOverlay(user.id, profile)
+      : Promise.resolve([] as AiWeekOneDetail[]),
+  ]);
 
   const preMoveSuggestions: PreMoveTile[] = aiSuggestions
     .filter((s) => !notForMeItemIds.has(s.id))
@@ -88,14 +95,6 @@ export default async function PlanPage() {
       interest: s.matchedInterest,
       addedToPlan: inPlanItemIds.has(s.id),
     }));
-
-  // Week 1 city-specific overlay. Cached per profile fingerprint;
-  // first load triggers a generation, subsequent loads are free reads.
-  // Empty array if profile is missing or AI failed — UI falls back to
-  // static guides.
-  const weekOneOverlay: AiWeekOneDetail[] = profile
-    ? await getOrGenerateWeekOneOverlay(user.id, profile)
-    : [];
 
   return (
     <main className="flex flex-col flex-1 items-center">
