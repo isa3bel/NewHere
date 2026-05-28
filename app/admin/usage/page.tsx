@@ -3,6 +3,8 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
+import { LocalTime } from "./LocalTime";
+
 type Row = {
   id: string;
   user_id: string;
@@ -218,7 +220,7 @@ export default async function AdminUsagePage() {
                   {recent.flatMap((r) => [
                     <tr key={r.id} className="border-t border-[var(--border)]">
                       <td className="py-2 pr-3 whitespace-nowrap">
-                        {formatTimestamp(r.created_at)}
+                        <LocalTime iso={r.created_at} />
                       </td>
                       <td className="py-2 pr-3 font-mono">
                         {r.user_id.slice(0, 8)}…
@@ -325,15 +327,6 @@ function formatCents(cents: number): string {
   return `$${dollars.toFixed(2)}`;
 }
 
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 type DayBucket = {
   day: string;
