@@ -26,110 +26,29 @@ const VALID_TYPES = new Set<ForYouItemType>([
 ]);
 
 // ============================================================
-// Render-time safety net
+// Render-time entry (no inline backfill)
 // ============================================================
-// Wraps getOrGenerateMonth1Tiles with a check: if any of the user's
-// goals has fewer than 3 non-engaged (no backing task) tiles in the
-// cache AND has at least one engaged tile (which should have triggered
-// a backfill via markForYouCompletedAction's `after()` callback),
-// inline a single backfill and re-read the cache. Catches the race
-// where the user reloads /plan before the background backfill from
-// Done has finished.
+// Returns the cached Month 1 tiles. Replacement tiles for engaged
+// (done / kept) tiles are produced exclusively by the background
+// `after()` callback in markForYouCompletedAction — running them
+// inline here made every Done / Keep click block the page re-render
+// for ~15-30s while a fresh Claude+web_search call ran. The user
+// trade-off: if you reload faster than the background backfill
+// completes (~15-30s), you may see 2 tiles in that goal instead of
+// 3. The next reload picks up the cached replacement.
 //
-// "Engaged" = the user clicked ✓ done on the tile, creating a backing
-// task (regardless of subsequent keep / maybe / not-for-me state).
-//
-// One backfill per render to stay within the function timeout budget.
-// Subsequent reloads pick up any remaining gaps (rare for typical use).
+// `tasks` is unused but kept on the signature so callers don't have
+// to thread fewer args; this also leaves room to reintroduce
+// targeted backfill (e.g. only when no recent task activity) without
+// another API change.
 
 export async function ensureMonth1TilesAreBackfilled(
   userId: string,
   profile: Profile,
-  tasks: Task[],
+  _tasks: Task[],
 ): Promise<SurfaceResult<AiMonth1Tile[]>> {
-  const result = await getOrGenerateMonth1Tiles(userId, profile);
-  if (result.status !== "ok" || profile.goals.length === 0) return result;
-
-  const engagedIds = new Set<string>();
-  for (const t of tasks) {
-    if (t.sourceItemId) engagedIds.add(t.sourceItemId);
-  }
-  if (engagedIds.size === 0) return result;
-
-  // Find every goal short of 3 non-engaged tiles whose backfill is
-  // therefore "owed". Previously this only handled one goal per render
-  // (with a break) — fine when after() backfill caught up in the
-  // background, but multiple goals in flight could leave one short
-  // for one or two extra reloads. Now we backfill them all in one pass.
-  const goalsNeedingBackfill: string[] = [];
-  for (const goal of profile.goals) {
-    const goalTiles = result.data.filter((t) => t.cluster === goal);
-    const nonEngaged = goalTiles.filter((t) => !engagedIds.has(t.id));
-    const engagedInGoal = goalTiles.some((t) => engagedIds.has(t.id));
-    if (nonEngaged.length < 3 && engagedInGoal) {
-      goalsNeedingBackfill.push(goal);
-    }
-  }
-
-  if (goalsNeedingBackfill.length === 0) return result;
-
-  // Generate one replacement tile per needy goal in parallel. Each
-  // generation call is independent so this fans out cleanly to ~30s
-  // total (the slowest one) rather than 30s × N goals.
-  const existingIds = result.data.map((t) => t.id);
-  const genResults = await Promise.all(
-    goalsNeedingBackfill.map((goal) =>
-      generateMoreTilesForGoal(userId, profile, goal, existingIds),
-    ),
-  );
-
-  const newTiles: AiMonth1Tile[] = [];
-  for (const gr of genResults) {
-    if (gr.status === "ok" && gr.data.length > 0) {
-      newTiles.push(gr.data[0]);
-    }
-  }
-  if (newTiles.length === 0) return result;
-
-  // Single combined cache write at the end. We re-read the cache here
-  // (rather than reusing `result.data`) so any tiles written by the
-  // parallel after() backfill from markForYouCompletedAction get
-  // merged in too. Dedupe by id when merging so any collision between
-  // an after()-written tile and an inline-written tile resolves
-  // cleanly to one row.
-  const surface = "month_1" as const;
-  const fingerprint = profileFingerprint(profile, surface);
-  const cachedAtWrite = await readCachedSuggestions(
-    userId,
-    surface,
-    fingerprint,
-  );
-  if (!cachedAtWrite) return result;
-
-  const merged = new Map<string, AiMonth1Tile>();
-  for (const t of cachedAtWrite.content as unknown as AiMonth1Tile[]) {
-    merged.set(t.id, t);
-  }
-  for (const t of newTiles) {
-    merged.set(t.id, t);
-  }
-
-  try {
-    await writeCachedSuggestions({
-      userId,
-      surface,
-      profileHash: fingerprint,
-      suggestions: Array.from(merged.values()) as unknown as AiSuggestion[],
-      model: cachedAtWrite.model,
-      inputTokens: 0,
-      outputTokens: 0,
-      searchCount: 0,
-    });
-  } catch {
-    // Same best-effort posture as backfillKeptMonth1Tile.
-  }
-
-  return await getOrGenerateMonth1Tiles(userId, profile);
+  void _tasks;
+  return getOrGenerateMonth1Tiles(userId, profile);
 }
 
 // ============================================================
@@ -300,6 +219,7 @@ CRITICAL RULES:
    The point is to broaden the user's exposure to nearby communities, not just exact-match their interests.
 5. **Tile types**: use "organization" or "community" or "resource". Avoid "event" and "class".
 6. **Image URLs**: include \`imageUrl\` when web search surfaces a real logo or representative photo (Wikipedia commons, the org's own .org/.com image, Reddit snoo for subreddits, etc.). Skip the field if you can't find a good one — the UI falls back to the emoji icon.
+7. **Mix time-of-day across each goal's 3 tiles.** Most clubs/classes/meetups skew evening — aim for at least one morning-leaning pick per goal when one fits naturally, so the user's resulting weekly routine isn't all weekday evenings. Good morning-friendly examples: coffee shops to become a regular at, early run clubs, parkrun chapters, yoga / pilates studios with morning classes, weekend brunch communities, indie bookstores with morning hours, breakfast meetups, libraries with weekday-morning programs. Do NOT force morning where it's unnatural — a chess club that genuinely only meets at 7pm should stay 7pm. Just avoid 3-out-of-3 evening picks per goal when valid morning alternatives exist. When listing the schedule, use specific times ("Saturdays 8am", "Tue/Thu 6:30am", "Daily 7am–4pm") rather than vague phrases like "weekly" so the routine slotting downstream can tell morning from evening.
 
 Use the user's social style + budget + has-car to bias picks. Skew higher-cost suggestions for high-budget users, social/extroverted picks for extroverts, walking-distance picks for no-car users, etc.
 
@@ -318,7 +238,7 @@ Each object shape:
   "links": [{ "label": "Short label", "url": "https://..." }],
   "meta": {
     "cost": "Free" | "$15/class" | "$60/mo" | etc.,
-    "schedule": "Tuesdays 7pm" | "First Saturday of month" | etc.,
+    "schedule": "Tuesdays 7pm" | "Saturdays 8am" | "Daily 6am–4pm" | etc.,
     "location": "neighborhood / address hint" | omitted,
     "howToJoin": "One-line how-to (RSVP at link, show up, fill form, etc.)"
   },

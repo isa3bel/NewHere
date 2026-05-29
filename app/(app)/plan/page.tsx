@@ -3,6 +3,7 @@ import Link from "next/link";
 import { dismissCelebrationAction } from "@/app/actions";
 
 import { AiFailureBanner } from "./AiFailureBanner";
+import { DailyLimitBanner } from "./DailyLimitBanner";
 
 // Vercel default function timeout is 10s on Hobby, 15s on Pro. Real
 // Claude calls with web_search routinely take 15–30s, so we bump it.
@@ -34,15 +35,18 @@ import {
   getTodaysFocus,
   moveSummary,
 } from "@/lib/plan-progress";
+import { getDailyUsage } from "@/lib/ai/usage-log";
 import type { Badge, KeeperState } from "@/lib/types";
 
 export default async function PlanPage() {
   const user = await requireUser();
-  const [profile, plan, badges] = await Promise.all([
+  const [profile, plan, badges, dailyUsage] = await Promise.all([
     getProfile(user.id),
     getActivePlan(user.id),
     getBadges(),
+    getDailyUsage(user.id),
   ]);
+  const atDailyLimit = dailyUsage.count >= dailyUsage.limit;
 
   if (!plan) {
     return (
@@ -155,7 +159,14 @@ export default async function PlanPage() {
           </p>
         </header>
 
-        {aiFailed && <AiFailureBanner />}
+        {atDailyLimit ? (
+          <DailyLimitBanner
+            count={dailyUsage.count}
+            limit={dailyUsage.limit}
+          />
+        ) : (
+          aiFailed && <AiFailureBanner />
+        )}
 
         {celebratingBadges.length > 0 && (
           <CelebrationBanner badges={celebratingBadges} />

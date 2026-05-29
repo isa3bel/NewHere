@@ -49,17 +49,14 @@ export async function logAiGeneration(args: {
   }
 }
 
-// Returns true if the user is below their daily regeneration ceiling.
-// Only counts *real, successful* generations:
-//   - cache_hit=false  → cache hits are free, don't count
-//   - model != 'mock'  → mock generations are free, don't count
-//   - succeeded=true   → failed attempts (including prior limit-exceeded
-//                        log rows) shouldn't make the user permanently
-//                        capped for the rest of the day
-//
-// Admins (ADMIN_EMAILS) get a much higher cap so iteration isn't
-// blocked. Anthropic's account-level spend cap is the ultimate backstop.
-export async function isUnderDailyLimit(userId: string): Promise<boolean> {
+// Returns today's count and the user's effective daily limit. Used by
+// the UI to render the "you've hit your cap" banner. Same filters as
+// isUnderDailyLimit so the count matches what gates generation.
+// Fails open on error (returns count=0 with the regular-user limit)
+// so a transient DB blip doesn't spuriously surface the cap banner.
+export async function getDailyUsage(
+  userId: string,
+): Promise<{ count: number; limit: number }> {
   const admin = createSupabaseAdminClient();
   const since = new Date();
   since.setHours(0, 0, 0, 0);
@@ -77,14 +74,27 @@ export async function isUnderDailyLimit(userId: string): Promise<boolean> {
   ]);
 
   if (countResult.error) {
-    // On error, fail open — better to allow a generation than to
-    // accidentally block all users because of a transient DB issue.
-    return true;
+    return { count: 0, limit: PER_USER_DAILY_GENERATION_LIMIT };
   }
   const limit = isAdmin
     ? PER_ADMIN_DAILY_GENERATION_LIMIT
     : PER_USER_DAILY_GENERATION_LIMIT;
-  return (countResult.count ?? 0) < limit;
+  return { count: countResult.count ?? 0, limit };
+}
+
+// Returns true if the user is below their daily regeneration ceiling.
+// Only counts *real, successful* generations:
+//   - cache_hit=false  → cache hits are free, don't count
+//   - model != 'mock'  → mock generations are free, don't count
+//   - succeeded=true   → failed attempts (including prior limit-exceeded
+//                        log rows) shouldn't make the user permanently
+//                        capped for the rest of the day
+//
+// Admins (ADMIN_EMAILS) get a much higher cap so iteration isn't
+// blocked. Anthropic's account-level spend cap is the ultimate backstop.
+export async function isUnderDailyLimit(userId: string): Promise<boolean> {
+  const { count, limit } = await getDailyUsage(userId);
+  return count < limit;
 }
 
 // Looks up the user's email and matches against ADMIN_EMAILS. Returns
