@@ -132,10 +132,8 @@ export function PlanView({
   return (
     <div className="lg:flex lg:gap-6">
       <div
-        className={`${
-          selectedTask
-            ? "hidden lg:block lg:w-[28rem] lg:flex-shrink-0"
-            : "w-full"
+        className={`w-full ${
+          selectedTask ? "lg:w-[28rem] lg:flex-shrink-0" : ""
         }`}
       >
         {isPreMove ? (
@@ -292,7 +290,7 @@ export function PlanView({
       </div>
 
       {selectedTask && (
-        <div className="lg:flex-1 lg:min-w-0">
+        <div className="lg:flex-1 lg:min-w-0 mt-6 lg:mt-0">
           <TaskDetailPanel
             ref={panelRef}
             task={selectedTask}

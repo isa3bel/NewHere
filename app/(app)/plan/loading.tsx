@@ -34,6 +34,17 @@ export default function PlanLoading() {
             <strong className="text-[var(--foreground)]">30 seconds</strong> on
             the first load — every visit after this is instant.
           </p>
+          <p className="mt-4 text-xs text-[var(--muted-foreground)]">
+            On a slow connection?{" "}
+            <a
+              href="/plan"
+              className="font-medium text-[var(--accent)] underline hover:no-underline"
+            >
+              Tap here to retry
+            </a>{" "}
+            — your plan finishes in the background, so the next try loads
+            instantly.
+          </p>
         </section>
 
         <div className="mt-10 space-y-8">
