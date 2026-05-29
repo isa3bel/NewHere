@@ -2,36 +2,27 @@
 
 import { useEffect, useState, useTransition } from "react";
 
-import {
-  addForYouToPlanAction,
-  markForYouCompletedAction,
-} from "@/app/actions";
+import { markForYouCompletedAction } from "@/app/actions";
 import { uniqByUrl } from "@/lib/ai/sanitize";
 import type { ForYouItem } from "@/lib/for-you-data";
 
 type Props = {
   item: ForYouItem;
   interest: string;
-  addedToPlan: boolean;
   completed: boolean;
 };
 
 // Click the row → expands inline to reveal the rich content the model
 // generated (longDescription, all links, meta tags). Click again → collapse.
 //
-// Two side actions, both rendered as <span role="button"> because they
-// live inside a parent <button> (the row expander). Browsers won't render
-// nested actual <button>s.
-//
-//   + plan       → adds to Week 1 as pending
-//   ✓ Mark done  → adds + immediately marks done in one click (for things
-//                  the user has already taken care of pre-move)
-//
-// Once done, both buttons collapse into a single "Done" badge and the
-// row dims — terminal state. Toggle back off from the task in Week 1.
-export function PreMoveRow({ item, interest, addedToPlan, completed }: Props) {
+// Single action: "✓ done" — flags this pre-move recommendation as
+// already taken care of. Stored as a completed task so it shows up in
+// the user's history and any badges that depend on it. Rendered as a
+// <span role="button"> because it lives inside the parent <button>
+// (the row expander) and browsers won't render nested actual <button>s.
+export function PreMoveRow({ item, interest, completed }: Props) {
   const [pending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<"added" | "done" | null>(null);
+  const [feedback, setFeedback] = useState<"done" | null>(null);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -40,10 +31,6 @@ export function PreMoveRow({ item, interest, addedToPlan, completed }: Props) {
     return () => clearTimeout(t);
   }, [feedback]);
 
-  const handleAdd = () => {
-    setFeedback("added");
-    startTransition(() => addForYouToPlanAction({ item, interest }));
-  };
   const handleMarkDone = () => {
     setFeedback("done");
     startTransition(() => markForYouCompletedAction({ item, interest }));
@@ -91,24 +78,13 @@ export function PreMoveRow({ item, interest, addedToPlan, completed }: Props) {
             ✓ Done
           </span>
         ) : (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <RowButton
-              onActivate={handleAdd}
-              disabled={pending || addedToPlan}
-              variant={addedToPlan ? "muted" : "outline"}
-              label={addedToPlan ? "Already in plan" : "Add to plan"}
-            >
-              {addedToPlan ? "✓ in plan" : "+ plan"}
-            </RowButton>
-            <RowButton
-              onActivate={handleMarkDone}
-              disabled={pending}
-              variant="outline"
-              label="Mark already done"
-            >
-              ✓ done
-            </RowButton>
-          </div>
+          <RowButton
+            onActivate={handleMarkDone}
+            disabled={pending}
+            label="Mark already done"
+          >
+            ✓ done
+          </RowButton>
         )}
       </button>
 
@@ -157,11 +133,7 @@ export function PreMoveRow({ item, interest, addedToPlan, completed }: Props) {
       {feedback && (
         <div className="px-3 py-1.5 border-t border-[var(--border)] bg-[var(--background)] text-xs text-[var(--muted-foreground)] flex items-center gap-2">
           <span className="text-[var(--accent)]">✓</span>
-          <span>
-            {feedback === "added"
-              ? "Added to your plan — look in Week 1 below."
-              : "Marked done — check Week 1 for the entry."}
-          </span>
+          <span>Marked done — check Week 1 for the entry.</span>
         </div>
       )}
     </li>
@@ -171,22 +143,18 @@ export function PreMoveRow({ item, interest, addedToPlan, completed }: Props) {
 function RowButton({
   onActivate,
   disabled,
-  variant,
   label,
   children,
 }: {
   onActivate: () => void;
   disabled: boolean;
-  variant: "outline" | "muted";
   label: string;
   children: React.ReactNode;
 }) {
   const base =
-    "text-xs h-7 px-2.5 rounded-full font-medium transition inline-flex items-center";
+    "text-xs h-7 px-2.5 rounded-full font-medium transition inline-flex items-center flex-shrink-0";
   const styles =
-    variant === "muted"
-      ? "bg-[var(--muted)] text-[var(--muted-foreground)] cursor-default"
-      : "border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer";
+    "border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer";
   const disabledStyles = disabled ? "opacity-60 cursor-not-allowed" : "";
   return (
     <span

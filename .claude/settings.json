@@ -9,7 +9,8 @@
       "Bash(findstr LISTENING)",
       "PowerShell(Stop-Process -Id 23668 -Force)",
       "PowerShell(\"done\")",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(powershell -Command \"\\(Get-Content 'app/sample/sample-month-one.ts' -Raw\\) -replace '    addedToPlan: false,\\\\r?\\\\n', '' | Set-Content 'app/sample/sample-month-one.ts' -NoNewline\")"
     ]
   }
 }

@@ -107,30 +107,12 @@ export async function setKeeperStateAction(args: {
   taskId: string;
   state: KeeperState;
 }) {
-  const user = await requireUser();
-  const task = await setTaskKeeperState(args.taskId, args.state);
-
-  // Backfill runs in the background via after() so the user sees an
-  // instant routine update on Keep instead of waiting 10-30s for the
-  // Claude+web_search call that fills the replacement tile. The tile
-  // slot in "Try things" gets refilled on the user's next page reload
-  // (the snapshot pattern in Month1Section already defers visible
-  // changes to mount-time anyway).
-  if (
-    args.state === "keep" &&
-    task &&
-    task.sourceItemId &&
-    !isStaticSourceId(task.sourceItemId)
-  ) {
-    const sourceItemId = task.sourceItemId;
-    after(async () => {
-      const profile = await getProfile(user.id);
-      if (profile) {
-        await backfillKeptMonth1Tile(user.id, profile, sourceItemId);
-      }
-    });
-  }
-
+  await requireUser();
+  await setTaskKeeperState(args.taskId, args.state);
+  // Backfill is triggered by markForYouCompletedAction (the Done
+  // click), which is always the first engagement on an AI tile.
+  // Subsequent Keep / Maybe / Not-for-me state changes don't need to
+  // re-backfill since the replacement is already queued from Done.
   revalidatePath("/plan");
 }
 
@@ -281,36 +263,6 @@ export async function loadMoreMonth1TilesAction(args: {
   return { status: "ok", tiles: result.data };
 }
 
-// "+ Add to my plan" on a pre-move recommendation. Creates a task in the
-// user's plan from the For You item; idempotent if clicked twice.
-// `phase` lets the caller pin the task into a specific phase bucket
-// (e.g. Month 1 AI tiles → "month_one") so the task lands in the
-// section the user added it from.
-export async function addForYouToPlanAction(args: {
-  item: ForYouItem;
-  interest: string;
-  phase?: Phase;
-}) {
-  const user = await requireUser();
-  const [profile, plan] = await Promise.all([
-    getProfile(user.id),
-    getActivePlan(user.id),
-  ]);
-  if (!plan) return;
-
-  const currentDay = profile?.moveDate ? daysSinceMove(profile.moveDate) : 0;
-  await createTaskFromForYou(
-    user.id,
-    plan.id,
-    args.item,
-    currentDay,
-    args.phase,
-    profile?.city ?? null,
-  );
-
-  revalidatePath("/plan");
-}
-
 // "Mark done" on a pre-move recommendation: the user has already done it
 // (or doesn't need to plan for it) and wants credit. Adds the task to
 // their plan AND flips it to done in one click — so it shows up in their
@@ -355,6 +307,23 @@ export async function markForYouCompletedAction(args: {
       newlyEarned.map((b) => b.id).join(","),
       { httpOnly: true, sameSite: "lax", path: "/", maxAge: 30 },
     );
+  }
+
+  // Month 1 AI tiles: kick off a background backfill so the slot
+  // gets refilled with a fresh suggestion by the next page load.
+  // Skipped for pre-move and static starter tasks.
+  if (
+    args.phase === "month_one" &&
+    task.sourceItemId &&
+    !isStaticSourceId(task.sourceItemId) &&
+    profile
+  ) {
+    const sourceItemId = task.sourceItemId;
+    const userId = user.id;
+    const userProfile = profile;
+    after(async () => {
+      await backfillKeptMonth1Tile(userId, userProfile, sourceItemId);
+    });
   }
 
   revalidatePath("/plan");

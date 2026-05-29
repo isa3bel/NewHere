@@ -76,16 +76,20 @@ export function Month1Section({
   const [, startTransition] = useTransition();
 
   // Snapshot of the visible tile set per goal, captured at mount time.
-  // Once a user clicks "Keep it" mid-session, the server updates the
-  // suggestion cache (kept tile stays, fresh backfill tile appended)
-  // and revalidates — which re-renders this component with new aiTiles
-  // props. We deliberately ignore that on subsequent renders: the user
-  // sees the kept tile remain in place until they refresh the page,
-  // at which point this snapshot rebuilds against the backfilled cache
-  // (kept tile filtered out, fresh tile slotted in).
+  // Filters out any tile the user has already engaged with (done OR
+  // kept) — for AI tiles, the existence of a backing task in taskMap
+  // means the user clicked "✓ done", since that's the only path to
+  // create a backing task. Engaged tiles graduate to history (done) or
+  // to "Your routine" (kept); they shouldn't come back on next reload.
   //
-  // useState's lazy initializer captures the first-render closure
-  // (aiTiles + taskMap + goals) and never re-runs.
+  // Mid-session "Done" or "Keep" clicks don't reflow the grid — the
+  // tile stays visible (showing done/keeper chip) until full page
+  // reload, when this snapshot rebuilds against the backfilled cache.
+  //
+  // Dev-mode note: Next.js Fast Refresh can preserve useState across
+  // code edits without remounting, so during local dev the snapshot
+  // can look stale after a save. Hard-refresh (Ctrl/Cmd+Shift+R) or
+  // restart `npm run dev` to force a clean mount.
   const [snapshotByGoal] = useState<Map<string, Month1Suggestion[]>>(() => {
     const m = new Map<string, Month1Suggestion[]>();
     for (const goal of goals) {
@@ -94,7 +98,7 @@ export function Month1Section({
         if (s.tile.cluster === goal) tilesForGoal.push(s);
       }
       const visible = tilesForGoal
-        .filter((s) => taskMap[s.tile.id]?.keeperState !== "keep")
+        .filter((s) => !taskMap[s.tile.id])
         .slice(0, 3);
       m.set(goal, visible);
     }
@@ -193,10 +197,11 @@ export function Month1Section({
       <div className="mt-6 space-y-8">
         {useAi ? (
           goals.map((goal) => {
-            // Always render the mount-time snapshot. The kept-tile
-            // hide + backfill swap only takes effect after a full page
-            // reload (when this component remounts and the snapshot
-            // is rebuilt from the freshly-cached tiles).
+            // Render the mount-time snapshot. Mid-session "Keep it"
+            // clicks do not reflow the grid — the kept tile stays
+            // visible (now showing the "📌 In your routine" chip)
+            // until the user refreshes the page, at which point the
+            // snapshot rebuilds against the backfilled cache.
             const goalTiles = snapshotByGoal.get(goal) ?? [];
             const goalExtras = extras[goal] ?? [];
             if (goalTiles.length === 0 && goalExtras.length === 0) return null;

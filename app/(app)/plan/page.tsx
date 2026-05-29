@@ -73,7 +73,6 @@ export default async function PlanPage() {
   const summary = moveSummary(currentDay);
 
   const notForMeItemIds = new Set<string>();
-  const inPlanItemIds = new Set<string>();
   const completedItemIds = new Set<string>();
   // Lookup so Month 1 AI tiles (initial AND client-side load-more extras)
   // can find their backing task to render the keep/maybe/not-for-me
@@ -84,7 +83,6 @@ export default async function PlanPage() {
   > = {};
   for (const t of tasks) {
     if (!t.sourceItemId) continue;
-    inPlanItemIds.add(t.sourceItemId);
     if (t.status === "done") completedItemIds.add(t.sourceItemId);
     if (t.keeperState === "not_for_me") notForMeItemIds.add(t.sourceItemId);
     month1TaskMap[t.sourceItemId] = {
@@ -122,7 +120,6 @@ export default async function PlanPage() {
     .map((s) => ({
       item: toForYouItem(s),
       interest: s.matchedInterest,
-      addedToPlan: inPlanItemIds.has(s.id),
       completed: completedItemIds.has(s.id),
     }));
 
@@ -130,7 +127,6 @@ export default async function PlanPage() {
     .filter((t) => !notForMeItemIds.has(t.id))
     .map((t) => ({
       tile: t,
-      addedToPlan: inPlanItemIds.has(t.id),
       completed: completedItemIds.has(t.id),
     }));
 

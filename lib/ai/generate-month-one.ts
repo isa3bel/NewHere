@@ -29,11 +29,15 @@ const VALID_TYPES = new Set<ForYouItemType>([
 // Render-time safety net
 // ============================================================
 // Wraps getOrGenerateMonth1Tiles with a check: if any of the user's
-// goals has fewer than 3 visible (non-kept) tiles in the cache AND has
-// at least one kept tile (which should have triggered a backfill via
-// setKeeperStateAction's `after()` callback), inline a single backfill
-// and re-read the cache. Catches the race where the user reloads /plan
-// before the background backfill from Keep has finished.
+// goals has fewer than 3 non-engaged (no backing task) tiles in the
+// cache AND has at least one engaged tile (which should have triggered
+// a backfill via markForYouCompletedAction's `after()` callback),
+// inline a single backfill and re-read the cache. Catches the race
+// where the user reloads /plan before the background backfill from
+// Done has finished.
+//
+// "Engaged" = the user clicked ✓ done on the tile, creating a backing
+// task (regardless of subsequent keep / maybe / not-for-me state).
 //
 // One backfill per render to stay within the function timeout budget.
 // Subsequent reloads pick up any remaining gaps (rare for typical use).
@@ -43,29 +47,89 @@ export async function ensureMonth1TilesAreBackfilled(
   profile: Profile,
   tasks: Task[],
 ): Promise<SurfaceResult<AiMonth1Tile[]>> {
-  let result = await getOrGenerateMonth1Tiles(userId, profile);
+  const result = await getOrGenerateMonth1Tiles(userId, profile);
   if (result.status !== "ok" || profile.goals.length === 0) return result;
 
-  const keptIds = new Set<string>();
+  const engagedIds = new Set<string>();
   for (const t of tasks) {
-    if (t.keeperState === "keep" && t.sourceItemId) {
-      keptIds.add(t.sourceItemId);
-    }
+    if (t.sourceItemId) engagedIds.add(t.sourceItemId);
   }
-  if (keptIds.size === 0) return result;
+  if (engagedIds.size === 0) return result;
 
+  // Find every goal short of 3 non-engaged tiles whose backfill is
+  // therefore "owed". Previously this only handled one goal per render
+  // (with a break) — fine when after() backfill caught up in the
+  // background, but multiple goals in flight could leave one short
+  // for one or two extra reloads. Now we backfill them all in one pass.
+  const goalsNeedingBackfill: string[] = [];
   for (const goal of profile.goals) {
     const goalTiles = result.data.filter((t) => t.cluster === goal);
-    const nonKept = goalTiles.filter((t) => !keptIds.has(t.id));
-    const keptInGoal = goalTiles.find((t) => keptIds.has(t.id));
-    if (nonKept.length < 3 && keptInGoal) {
-      await backfillKeptMonth1Tile(userId, profile, keptInGoal.id);
-      result = await getOrGenerateMonth1Tiles(userId, profile);
-      break;
+    const nonEngaged = goalTiles.filter((t) => !engagedIds.has(t.id));
+    const engagedInGoal = goalTiles.some((t) => engagedIds.has(t.id));
+    if (nonEngaged.length < 3 && engagedInGoal) {
+      goalsNeedingBackfill.push(goal);
     }
   }
 
-  return result;
+  if (goalsNeedingBackfill.length === 0) return result;
+
+  // Generate one replacement tile per needy goal in parallel. Each
+  // generation call is independent so this fans out cleanly to ~30s
+  // total (the slowest one) rather than 30s × N goals.
+  const existingIds = result.data.map((t) => t.id);
+  const genResults = await Promise.all(
+    goalsNeedingBackfill.map((goal) =>
+      generateMoreTilesForGoal(userId, profile, goal, existingIds),
+    ),
+  );
+
+  const newTiles: AiMonth1Tile[] = [];
+  for (const gr of genResults) {
+    if (gr.status === "ok" && gr.data.length > 0) {
+      newTiles.push(gr.data[0]);
+    }
+  }
+  if (newTiles.length === 0) return result;
+
+  // Single combined cache write at the end. We re-read the cache here
+  // (rather than reusing `result.data`) so any tiles written by the
+  // parallel after() backfill from markForYouCompletedAction get
+  // merged in too. Dedupe by id when merging so any collision between
+  // an after()-written tile and an inline-written tile resolves
+  // cleanly to one row.
+  const surface = "month_1" as const;
+  const fingerprint = profileFingerprint(profile, surface);
+  const cachedAtWrite = await readCachedSuggestions(
+    userId,
+    surface,
+    fingerprint,
+  );
+  if (!cachedAtWrite) return result;
+
+  const merged = new Map<string, AiMonth1Tile>();
+  for (const t of cachedAtWrite.content as unknown as AiMonth1Tile[]) {
+    merged.set(t.id, t);
+  }
+  for (const t of newTiles) {
+    merged.set(t.id, t);
+  }
+
+  try {
+    await writeCachedSuggestions({
+      userId,
+      surface,
+      profileHash: fingerprint,
+      suggestions: Array.from(merged.values()) as unknown as AiSuggestion[],
+      model: cachedAtWrite.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      searchCount: 0,
+    });
+  } catch {
+    // Same best-effort posture as backfillKeptMonth1Tile.
+  }
+
+  return await getOrGenerateMonth1Tiles(userId, profile);
 }
 
 // ============================================================

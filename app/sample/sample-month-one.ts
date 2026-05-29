@@ -42,7 +42,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "community",
     },
-    addedToPlan: false,
     completed: false,
   },
   {
@@ -71,7 +70,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "running",
     },
-    addedToPlan: false,
     completed: false,
   },
   {
@@ -100,7 +98,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "community",
     },
-    addedToPlan: false,
     completed: false,
   },
 
@@ -130,7 +127,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "climbing",
     },
-    addedToPlan: false,
     completed: false,
   },
   {
@@ -158,7 +154,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "yoga",
     },
-    addedToPlan: false,
     completed: false,
   },
   {
@@ -187,7 +182,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "running",
     },
-    addedToPlan: false,
     completed: false,
   },
 
@@ -218,7 +212,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "books",
     },
-    addedToPlan: false,
     completed: false,
   },
   {
@@ -247,7 +240,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "art",
     },
-    addedToPlan: false,
     completed: false,
   },
   {
@@ -276,7 +268,6 @@ export const SAMPLE_AUSTIN_MONTH_ONE: Month1Suggestion[] = [
       },
       matchedInterest: "wine",
     },
-    addedToPlan: false,
     completed: false,
   },
 ];

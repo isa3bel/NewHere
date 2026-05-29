@@ -21,13 +21,11 @@ import { RefreshSuggestionsButton } from "./RefreshSuggestionsButton";
 export type PreMoveTile = {
   item: ForYouItem;
   interest: string;
-  addedToPlan: boolean;
   completed: boolean;
 };
 
 export type Month1Suggestion = {
   tile: AiMonth1Tile;
-  addedToPlan: boolean;
   completed: boolean;
 };
 
@@ -165,6 +163,20 @@ export function PlanView({
   const overlayForTask = (t: Task): AiWeekOneDetail | undefined =>
     t.sourceItemId ? overlayBySlot.get(t.sourceItemId) : undefined;
 
+  // sourceItemIds of every tile currently in the AI cache for this
+  // profile (pre-move + Month 1). Used alongside the createdCity filter
+  // in Quarter 1 "Your routine" to hide kept anchors that came from
+  // earlier AI generations (e.g. stale orphans left over after a
+  // profile edit regenerated the cache with new tile IDs).
+  const currentAiTileIds = useMemo(
+    () =>
+      new Set<string>([
+        ...preMoveSuggestions.map((p) => p.item.id),
+        ...month1Suggestions.map((s) => s.tile.id),
+      ]),
+    [preMoveSuggestions, month1Suggestions],
+  );
+
   return (
     <div className="lg:flex lg:gap-6">
       <div
@@ -195,7 +207,6 @@ export function PlanView({
                     key={p.item.id}
                     item={p.item}
                     interest={p.interest}
-                    addedToPlan={p.addedToPlan}
                     completed={p.completed}
                   />
                 ))}
@@ -310,6 +321,7 @@ export function PlanView({
                       allTasks={tasks}
                       focusIds={focusIds}
                       currentCity={city}
+                      currentAiTileIds={currentAiTileIds}
                     />
                   ) : (
                     <ul className="space-y-3">

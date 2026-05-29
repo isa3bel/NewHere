@@ -127,8 +127,8 @@ export type AiMonth1Tile = {
   matchedInterest?: string;    // optional — which user interest steered this pick
 };
 
-// Adapter so the existing addForYouToPlanAction / markForYouCompletedAction
-// can accept Month 1 tiles directly (they expect a ForYouItem shape).
+// Adapter so markForYouCompletedAction can accept Month 1 tiles
+// directly (the action expects a ForYouItem shape).
 export function month1TileToForYouItem(tile: AiMonth1Tile): ForYouItem {
   return {
     id: tile.id,
