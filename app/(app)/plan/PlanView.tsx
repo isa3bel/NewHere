@@ -107,9 +107,30 @@ export function PlanView({
   };
 
   useEffect(() => {
-    if (selectedId && panelRef.current) {
+    if (!selectedId || !panelRef.current) return;
+    // Desktop only — on mobile the panel is a fixed-position bottom
+    // sheet, so no scroll is needed (and scrolling would push the list
+    // off-screen behind it).
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 1024px)").matches
+    ) {
       panelRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
+  }, [selectedId]);
+
+  // Lock body scroll on mobile while the bottom sheet is open so the
+  // underlying list stays anchored at the tapped task. Closing the
+  // sheet restores both scroll and visibility — no jump.
+  useEffect(() => {
+    if (!selectedId) return;
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [selectedId]);
 
   const phaseBuckets: Record<Phase, Task[]> = useMemo(() => {
@@ -311,14 +332,23 @@ export function PlanView({
       </div>
 
       {selectedTask && (
-        <div className="lg:flex-1 lg:min-w-0 mt-6 lg:mt-0">
-          <TaskDetailPanel
-            ref={panelRef}
-            task={selectedTask}
-            aiDetail={overlayForTask(selectedTask)}
-            onClose={() => setSelectedId(null)}
+        <>
+          {/* Backdrop — mobile only. Tap closes. */}
+          <div
+            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+            onClick={() => setSelectedId(null)}
+            aria-hidden
           />
-        </div>
+          {/* Bottom sheet on mobile, inline side column on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-2xl bg-[var(--background)] shadow-xl lg:static lg:inset-auto lg:max-h-none lg:overflow-visible lg:rounded-none lg:bg-transparent lg:shadow-none lg:flex-1 lg:min-w-0">
+            <TaskDetailPanel
+              ref={panelRef}
+              task={selectedTask}
+              aiDetail={overlayForTask(selectedTask)}
+              onClose={() => setSelectedId(null)}
+            />
+          </div>
+        </>
       )}
     </div>
   );

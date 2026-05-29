@@ -10,10 +10,12 @@ export const USE_FAKE_AI = process.env.USE_FAKE_AI !== "false";
 // Hard ceiling on how many regenerations a single user can trigger
 // per day. Independent of Anthropic's account-level spend cap — this
 // catches a runaway client loop before it ever reaches the API.
-// At 5/day a real user has plenty of headroom for normal use
-// (onboarding + a couple of profile edits), but a runaway can't drain
-// the account. Bump this up if it becomes a real-user pain point.
-export const PER_USER_DAILY_GENERATION_LIMIT = 5;
+// At 10/day a real user has plenty of headroom for normal use
+// (onboarding + a couple of profile edits + a few "Load more" clicks),
+// but a runaway can't drain the account. First plan load alone burns
+// 3 (pre_move + week_one + month_1), so 5 was too tight once
+// per-goal Load more landed.
+export const PER_USER_DAILY_GENERATION_LIMIT = 10;
 
 // Admin users (matched via ADMIN_EMAILS env var) get a much higher
 // per-day cap so testing/iteration isn't blocked. Anthropic's

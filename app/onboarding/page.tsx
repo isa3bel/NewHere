@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { saveOnboardingAction } from "@/app/actions";
 import { ProfileForm } from "@/app/_components/ProfileForm";
@@ -8,6 +9,15 @@ import { getProfile } from "@/lib/db";
 export default async function OnboardingPage() {
   const user = await requireUser();
   const existing = await getProfile(user.id);
+
+  // If the user has already onboarded (profile with the two required
+  // fields), send them straight to their plan. The home page's "Get
+  // my plan" CTA links here unconditionally, so returning users would
+  // otherwise see a re-onboarding screen with all their answers
+  // pre-filled — confusing. They can edit at /profile instead.
+  if (existing && existing.city && existing.moveDate) {
+    redirect("/plan");
+  }
 
   return (
     <main className="flex flex-col flex-1 items-center">
