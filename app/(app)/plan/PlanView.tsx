@@ -4,13 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { toggleTaskAction } from "@/app/actions";
 import { uniqByUrl } from "@/lib/ai/sanitize";
-import type { AiWeekOneDetail } from "@/lib/ai/types";
+import type { AiMonth1Tile, AiWeekOneDetail } from "@/lib/ai/types";
 import type { ForYouItem } from "@/lib/for-you-data";
 import { getTaskGuide } from "@/lib/task-guides";
 import { phaseStatus } from "@/lib/plan-progress";
 import type { PhaseStatus } from "@/lib/plan-progress";
 import { PHASE_RANGES } from "@/lib/types";
-import type { Phase, Task, TaskCategory } from "@/lib/types";
+import type { KeeperState, Phase, Task, TaskCategory } from "@/lib/types";
 
 import { KeeperPrompt } from "./KeeperPrompt";
 import { Month1Section } from "./Month1Section";
@@ -21,6 +21,12 @@ import { RefreshSuggestionsButton } from "./RefreshSuggestionsButton";
 export type PreMoveTile = {
   item: ForYouItem;
   interest: string;
+  addedToPlan: boolean;
+  completed: boolean;
+};
+
+export type Month1Suggestion = {
+  tile: AiMonth1Tile;
   addedToPlan: boolean;
   completed: boolean;
 };
@@ -56,6 +62,12 @@ type Props = {
   currentDay: number;
   preMoveSuggestions: PreMoveTile[];
   weekOneOverlay: AiWeekOneDetail[];
+  month1Suggestions: Month1Suggestion[];
+  // sourceItemId → backing task (for the Month 1 KeeperPrompt). Includes
+  // every task with a source_item_id, so it covers both initial AI tiles
+  // and any extras the user added via the "Load more" → "✓ done" path.
+  month1TaskMap: Record<string, { taskId: string; keeperState: KeeperState }>;
+  goals: string[];
   city: string | null;
 };
 
@@ -65,6 +77,9 @@ export function PlanView({
   currentDay,
   preMoveSuggestions,
   weekOneOverlay,
+  month1Suggestions,
+  month1TaskMap,
+  goals,
   city,
 }: Props) {
   const isPreMove = currentDay < 0;
@@ -261,7 +276,13 @@ export function PlanView({
                 </button>
                 {!collapsed &&
                   (phase === "month_one" ? (
-                    <Month1Section tasks={phaseTasks} focusIds={focusIds} />
+                    <Month1Section
+                      tasks={phaseTasks}
+                      focusIds={focusIds}
+                      aiTiles={month1Suggestions}
+                      taskMap={month1TaskMap}
+                      goals={goals}
+                    />
                   ) : phase === "quarter_one" ? (
                     <Quarter1Section
                       tasks={phaseTasks}

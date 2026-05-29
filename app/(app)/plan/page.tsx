@@ -12,10 +12,15 @@ import { AiFailureBanner } from "./AiFailureBanner";
 export const maxDuration = 60;
 import { PlanView } from "./PlanView";
 import type { PreMoveTile } from "./PlanView";
+import { getOrGenerateMonth1Tiles } from "@/lib/ai/generate-month-one";
 import { getOrGeneratePreMoveSuggestions } from "@/lib/ai/generate-pre-move";
 import { getOrGenerateWeekOneOverlay } from "@/lib/ai/generate-week-one";
 import { toForYouItem } from "@/lib/ai/types";
-import type { AiSuggestion, AiWeekOneDetail } from "@/lib/ai/types";
+import type {
+  AiMonth1Tile,
+  AiSuggestion,
+  AiWeekOneDetail,
+} from "@/lib/ai/types";
 import { requireUser } from "@/lib/auth";
 import { readCelebrationBadgeIds } from "@/lib/celebration";
 import {
@@ -29,7 +34,7 @@ import {
   getTodaysFocus,
   moveSummary,
 } from "@/lib/plan-progress";
-import type { Badge } from "@/lib/types";
+import type { Badge, KeeperState } from "@/lib/types";
 
 export default async function PlanPage() {
   const user = await requireUser();
@@ -70,18 +75,27 @@ export default async function PlanPage() {
   const notForMeItemIds = new Set<string>();
   const inPlanItemIds = new Set<string>();
   const completedItemIds = new Set<string>();
+  // Lookup so Month 1 AI tiles (initial AND client-side load-more extras)
+  // can find their backing task to render the keep/maybe/not-for-me
+  // prompt after the user clicks done.
+  const month1TaskMap: Record<
+    string,
+    { taskId: string; keeperState: KeeperState }
+  > = {};
   for (const t of tasks) {
     if (!t.sourceItemId) continue;
     inPlanItemIds.add(t.sourceItemId);
     if (t.status === "done") completedItemIds.add(t.sourceItemId);
     if (t.keeperState === "not_for_me") notForMeItemIds.add(t.sourceItemId);
+    month1TaskMap[t.sourceItemId] = {
+      taskId: t.id,
+      keeperState: t.keeperState,
+    };
   }
 
-  // Both AI surfaces in parallel so the page render time is
-  // max(pre_move, week_one) rather than their sum. Cache hits return
-  // ~instantly; cold misses are the slow case where parallelism matters.
-  // Each call is independent — no shared state, no dependency.
-  const [preMoveResult, weekOneResult] = await Promise.all([
+  // Three AI surfaces in parallel — total render time is max() of the
+  // three rather than their sum. Each is independent.
+  const [preMoveResult, weekOneResult, month1Result] = await Promise.all([
     profile && currentDay < 0
       ? getOrGeneratePreMoveSuggestions(user.id, profile)
       : Promise.resolve({ status: "ok", data: [] as AiSuggestion[] } as const),
@@ -91,11 +105,17 @@ export default async function PlanPage() {
           status: "ok",
           data: [] as AiWeekOneDetail[],
         } as const),
+    profile
+      ? getOrGenerateMonth1Tiles(user.id, profile)
+      : Promise.resolve({ status: "ok", data: [] as AiMonth1Tile[] } as const),
   ]);
 
   const aiFailed =
-    preMoveResult.status === "failed" || weekOneResult.status === "failed";
+    preMoveResult.status === "failed" ||
+    weekOneResult.status === "failed" ||
+    month1Result.status === "failed";
   const weekOneOverlay = weekOneResult.data;
+  const month1Tiles = month1Result.data;
 
   const preMoveSuggestions: PreMoveTile[] = preMoveResult.data
     .filter((s) => !notForMeItemIds.has(s.id))
@@ -104,6 +124,14 @@ export default async function PlanPage() {
       interest: s.matchedInterest,
       addedToPlan: inPlanItemIds.has(s.id),
       completed: completedItemIds.has(s.id),
+    }));
+
+  const month1Suggestions = month1Tiles
+    .filter((t) => !notForMeItemIds.has(t.id))
+    .map((t) => ({
+      tile: t,
+      addedToPlan: inPlanItemIds.has(t.id),
+      completed: completedItemIds.has(t.id),
     }));
 
   return (
@@ -144,6 +172,9 @@ export default async function PlanPage() {
             currentDay={currentDay}
             preMoveSuggestions={preMoveSuggestions}
             weekOneOverlay={weekOneOverlay}
+            month1Suggestions={month1Suggestions}
+            month1TaskMap={month1TaskMap}
+            goals={profile?.goals ?? []}
             city={profile?.city ?? null}
           />
         </div>

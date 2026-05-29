@@ -89,3 +89,61 @@ export type AiWeekOneDetail = {
   descriptionOverride?: string; // city-specific replacement description
   guide: AiTaskGuide;          // detailed right-panel content
 };
+
+// ============================================================
+// Month 1 "Try things" tile shape
+// ============================================================
+// Unlike Week 1 (which overlays static slots), Month 1 fully replaces
+// the surface with AI-generated tiles. Each tile is a real local
+// organization or community with recurring activities — never a one-off
+// event unless it's tied to an org that hosts repeat events.
+//
+// Tiles are grouped into the same 4 outcome clusters as the existing UX
+// (community / hobby / routine / exploration). The page renders them
+// per cluster with the cluster-specific framing.
+
+// Cluster is now the user's GOAL label (e.g. "Make new friends", or a
+// custom string the user typed in onboarding). Up to 3 per profile.
+// We don't constrain to a union — that would invalidate the cache every
+// time the GOAL_TAGS list changes.
+export type AiMonth1Cluster = string;
+
+export type AiMonth1Tile = {
+  id: string;                  // stable slug like "sf-bay-area-bouldering-coalition"
+  cluster: AiMonth1Cluster;    // the user's goal label this tile maps to
+  title: string;
+  type: ForYouItemType;        // community / organization / resource (avoid event/class)
+  icon: string;                // fallback emoji shown when imageUrl absent or fails to load
+  imageUrl?: string;           // logo or representative photo from the web (optional)
+  shortDescription: string;
+  longDescription: string;
+  links: { label: string; url: string }[];
+  meta?: {
+    cost?: string;
+    schedule?: string;        // recurring cadence (e.g. "Wednesdays at 6:30pm")
+    location?: string;
+    howToJoin?: string;       // one-line "how do I get started"
+  };
+  matchedInterest?: string;    // optional — which user interest steered this pick
+};
+
+// Adapter so the existing addForYouToPlanAction / markForYouCompletedAction
+// can accept Month 1 tiles directly (they expect a ForYouItem shape).
+export function month1TileToForYouItem(tile: AiMonth1Tile): ForYouItem {
+  return {
+    id: tile.id,
+    title: tile.title,
+    type: tile.type,
+    icon: tile.icon,
+    shortDescription: tile.shortDescription,
+    longDescription: tile.longDescription,
+    links: tile.links,
+    meta: tile.meta
+      ? {
+          cost: tile.meta.cost,
+          schedule: tile.meta.schedule,
+          location: tile.meta.location,
+        }
+      : undefined,
+  };
+}

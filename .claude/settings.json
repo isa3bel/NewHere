@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3000)",
+      "Bash(taskkill /F /PID 25204)",
+      "PowerShell(Stop-Process -Id 25204 -Force)",
+      "Bash(findstr LISTENING)",
+      "PowerShell(Stop-Process -Id 23668 -Force)",
+      "PowerShell(\"done\")",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

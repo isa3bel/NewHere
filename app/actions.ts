@@ -5,6 +5,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { invalidateCachedSuggestions } from "@/lib/ai/cache";
+import { generateMoreTilesForGoal } from "@/lib/ai/generate-month-one";
+import type { AiMonth1Tile } from "@/lib/ai/types";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { CELEBRATION_COOKIE } from "@/lib/celebration";
 import {
@@ -36,6 +38,14 @@ function readProfileFromForm(userId: string, formData: FormData): Profile {
   // never trust the client.
   const neighborhoodRaw = (formData.get("neighborhood") as string) || "";
   const neighborhood = neighborhoodRaw.trim().slice(0, 80) || null;
+
+  // Cap goals at 3, trim each, drop empties. Mirror the GoalsField client
+  // cap — never trust the client.
+  const goals = (formData.getAll("goals") as string[])
+    .map((g) => g.trim().slice(0, 60))
+    .filter(Boolean)
+    .slice(0, 3);
+
   return {
     userId,
     displayName: (formData.get("displayName") as string) || null,
@@ -46,7 +56,7 @@ function readProfileFromForm(userId: string, formData: FormData): Profile {
     hasCar: formData.get("hasCar") === "on",
     budgetTier: (formData.get("budgetTier") as BudgetTier) || "medium",
     interests: formData.getAll("interests") as string[],
-    goals: formData.getAll("goals") as string[],
+    goals,
   };
 }
 
@@ -193,6 +203,43 @@ export async function refreshAiSuggestionsAction(args: {
   const user = await requireUser();
   await invalidateCachedSuggestions(user.id, args.surface);
   revalidatePath("/plan");
+}
+
+export type LoadMoreMonth1Result =
+  | { status: "ok"; tiles: AiMonth1Tile[] }
+  | { status: "error"; message: string };
+
+// "Load more" on a single Month 1 goal section. Fresh AI call each time
+// — not cached, so a page refresh resets the user to the default tile
+// set. Still counts toward PER_USER_DAILY_GENERATION_LIMIT so it can't
+// be spammed across sessions. The client component limits to one click
+// per goal per page load.
+export async function loadMoreMonth1TilesAction(args: {
+  goal: string;
+  excludeIds: string[];
+}): Promise<LoadMoreMonth1Result> {
+  const user = await requireUser();
+  const profile = await getProfile(user.id);
+  if (!profile) {
+    return { status: "error", message: "No profile found." };
+  }
+  if (!profile.goals.includes(args.goal)) {
+    return { status: "error", message: "Goal not part of your profile." };
+  }
+
+  const result = await generateMoreTilesForGoal(
+    user.id,
+    profile,
+    args.goal,
+    args.excludeIds.slice(0, 50),
+  );
+  if (result.status === "failed" || result.data.length === 0) {
+    return {
+      status: "error",
+      message: "Couldn't load more right now — try again later.",
+    };
+  }
+  return { status: "ok", tiles: result.data };
 }
 
 // "+ Add to my plan" on a pre-move recommendation. Creates a task in the

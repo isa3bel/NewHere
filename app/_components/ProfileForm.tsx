@@ -1,3 +1,4 @@
+import { GoalsField } from "@/app/onboarding/GoalsField";
 import { InterestsField } from "@/app/onboarding/InterestsField";
 import {
   GOAL_TAGS,
@@ -166,24 +167,16 @@ export function ProfileForm({ existing, action, submitLabel }: Props) {
         />
       </Field>
 
-      <Field label="What're your goals? (pick any)">
-        <div className="flex flex-wrap gap-2">
-          {GOAL_TAGS.map((tag) => (
-            <label
-              key={tag}
-              className="cursor-pointer rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-sm has-[:checked]:border-[var(--accent)] has-[:checked]:bg-[var(--accent)] has-[:checked]:text-[var(--accent-foreground)]"
-            >
-              <input
-                type="checkbox"
-                name="goals"
-                value={tag}
-                defaultChecked={existing?.goals.includes(tag) ?? false}
-                className="sr-only"
-              />
-              {tag}
-            </label>
-          ))}
-        </div>
+      <Field
+        label="What're your top three goals?"
+        required
+        hint="Pick up to three — or add your own. These shape which 'Try things' suggestions appear in Month 1."
+      >
+        <GoalsField
+          name="goals"
+          predefined={GOAL_TAGS}
+          defaultSelected={existing?.goals ?? []}
+        />
       </Field>
 
       <button

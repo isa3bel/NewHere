@@ -118,6 +118,9 @@ export default function SamplePage() {
             currentDay={currentDay}
             preMoveSuggestions={[]}
             weekOneOverlay={SAMPLE_AUSTIN_WEEK_ONE}
+            month1Suggestions={[]}
+            month1TaskMap={{}}
+            goals={[]}
             city={sampleCity}
           />
         </div>

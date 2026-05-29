@@ -39,7 +39,7 @@ export function Quarter1Section({ allTasks }: Props) {
   const bySlot = new Map<RoutineSlot, SlottedAnchor[]>();
   const unslotted: SlottedAnchor[] = [];
   for (const anchor of anchors) {
-    const routing = getRoutingForAnchor(anchor.title, anchor.category);
+    const routing = getRoutingForAnchor(anchor);
     const slotted: SlottedAnchor = {
       task: anchor,
       cadence: routing.cadence,
