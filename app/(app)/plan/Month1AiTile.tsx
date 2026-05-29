@@ -53,7 +53,11 @@ export function Month1AiTile({
   const handleDone = () => {
     setFeedback("done");
     startTransition(() =>
-      markForYouCompletedAction({ item: forYouItem, interest }),
+      markForYouCompletedAction({
+        item: forYouItem,
+        interest,
+        phase: "month_one",
+      }),
     );
   };
 

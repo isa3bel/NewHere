@@ -26,6 +26,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   BudgetTier,
   KeeperState,
+  Phase,
   Profile,
   SocialStyle,
   TaskStatus,
@@ -244,9 +245,13 @@ export async function loadMoreMonth1TilesAction(args: {
 
 // "+ Add to my plan" on a pre-move recommendation. Creates a task in the
 // user's plan from the For You item; idempotent if clicked twice.
+// `phase` lets the caller pin the task into a specific phase bucket
+// (e.g. Month 1 AI tiles → "month_one") so the task lands in the
+// section the user added it from.
 export async function addForYouToPlanAction(args: {
   item: ForYouItem;
   interest: string;
+  phase?: Phase;
 }) {
   const user = await requireUser();
   const [profile, plan] = await Promise.all([
@@ -256,7 +261,13 @@ export async function addForYouToPlanAction(args: {
   if (!plan) return;
 
   const currentDay = profile?.moveDate ? daysSinceMove(profile.moveDate) : 0;
-  await createTaskFromForYou(user.id, plan.id, args.item, currentDay);
+  await createTaskFromForYou(
+    user.id,
+    plan.id,
+    args.item,
+    currentDay,
+    args.phase,
+  );
 
   revalidatePath("/plan");
 }
@@ -269,6 +280,7 @@ export async function addForYouToPlanAction(args: {
 export async function markForYouCompletedAction(args: {
   item: ForYouItem;
   interest: string;
+  phase?: Phase;
 }) {
   const user = await requireUser();
   const [profile, plan] = await Promise.all([
@@ -285,6 +297,7 @@ export async function markForYouCompletedAction(args: {
     plan.id,
     args.item,
     currentDay,
+    args.phase,
   );
 
   // Now flip to done. Routes through badge evaluation so any milestones

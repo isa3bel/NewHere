@@ -9,6 +9,10 @@ import {
 } from "@/lib/plan-progress";
 import type { Task } from "@/lib/types";
 
+import {
+  SAMPLE_AUSTIN_GOALS,
+  SAMPLE_AUSTIN_MONTH_ONE,
+} from "./sample-month-one";
 import { SAMPLE_AUSTIN_WEEK_ONE } from "./sample-week-one";
 
 // Public, no-auth sample of what a personalized NewHere plan looks like.
@@ -118,9 +122,9 @@ export default function SamplePage() {
             currentDay={currentDay}
             preMoveSuggestions={[]}
             weekOneOverlay={SAMPLE_AUSTIN_WEEK_ONE}
-            month1Suggestions={[]}
+            month1Suggestions={SAMPLE_AUSTIN_MONTH_ONE}
             month1TaskMap={{}}
-            goals={[]}
+            goals={SAMPLE_AUSTIN_GOALS}
             city={sampleCity}
           />
         </div>

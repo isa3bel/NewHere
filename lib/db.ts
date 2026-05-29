@@ -4,11 +4,12 @@ import type { ForYouItem } from "./for-you-data";
 import { mockTasks } from "./mock-data";
 import { createSupabaseAdminClient } from "./supabase/admin";
 import { createSupabaseServerClient } from "./supabase/server";
-import { phaseForDay } from "./types";
+import { PHASE_RANGES, phaseForDay } from "./types";
 import type {
   Badge,
   BadgeCriteria,
   KeeperState,
+  Phase,
   Plan,
   Profile,
   Task,
@@ -406,6 +407,7 @@ export async function createTaskFromForYou(
   planId: string,
   item: ForYouItem,
   currentDay: number,
+  phaseOverride?: Phase,
 ): Promise<Task> {
   const supabase = await createSupabaseServerClient();
 
@@ -418,10 +420,22 @@ export async function createTaskFromForYou(
     .maybeSingle();
   if (existing) return rowToTask(existing as TaskRow);
 
-  // Otherwise insert. Schedule for the next reasonable day so it pops up
-  // near-term rather than as a far-out commitment.
-  const dayOffset = Math.max(0, currentDay + 1);
-  const phase = phaseForDay(dayOffset);
+  // Schedule for the next reasonable day so it pops up near-term rather
+  // than as a far-out commitment. When the caller forces a phase
+  // (e.g. Month 1 AI tile → "month_one"), clamp dayOffset into that
+  // phase's range so the task actually renders inside the section the
+  // user added it from.
+  const naturalDay = Math.max(0, currentDay + 1);
+  let dayOffset: number;
+  let phase: Phase;
+  if (phaseOverride) {
+    const range = PHASE_RANGES[phaseOverride];
+    dayOffset = Math.max(range.start, Math.min(naturalDay, range.end));
+    phase = phaseOverride;
+  } else {
+    dayOffset = naturalDay;
+    phase = phaseForDay(dayOffset);
+  }
 
   const { data, error } = await supabase
     .from("tasks")

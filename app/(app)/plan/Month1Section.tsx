@@ -77,8 +77,33 @@ export function Month1Section({
 
   const extrasFlat = Object.values(extras).flat();
   const total = useAi ? aiTiles.length + extrasFlat.length : tasks.length;
-  const triedCount = tasks.filter((t) => t.status === "done").length;
-  const keptCount = tasks.filter((t) => t.keeperState === "keep").length;
+
+  // Tried / kept counts.
+  //   AI path: count by intersecting AI tile IDs (initial + extras) with
+  //     taskMap. Reading from phaseTasks alone would miss tasks that
+  //     landed in the wrong phase earlier (before the phase override on
+  //     createTaskFromForYou), and would mix in any Month 1 starter
+  //     tasks the user happens to also have in their plan.
+  //   Static path: keep the old phaseTasks-based count.
+  let triedCount: number;
+  let keptCount: number;
+  if (useAi) {
+    const tileIds = [
+      ...aiTiles.map((s) => s.tile.id),
+      ...extrasFlat.map((t) => t.id),
+    ];
+    triedCount = 0;
+    keptCount = 0;
+    for (const id of tileIds) {
+      const backing = taskMap[id];
+      if (!backing) continue;
+      triedCount += 1;
+      if (backing.keeperState === "keep") keptCount += 1;
+    }
+  } else {
+    triedCount = tasks.filter((t) => t.status === "done").length;
+    keptCount = tasks.filter((t) => t.keeperState === "keep").length;
+  }
 
   // AI: bucket per goal label (cluster field).
   const aiByGoal = new Map<string, Month1Suggestion[]>();
