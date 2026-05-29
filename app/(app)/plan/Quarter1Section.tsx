@@ -20,11 +20,11 @@ type Props = {
   tasks: Task[];
   allTasks: Task[];
   focusIds: Set<string>;
-  // sourceItemIds of every tile currently in the AI cache for the
-  // user's profile (pre-move + Month 1). Used to filter out stale
-  // anchors — e.g. a "Keep it" from a previous city whose AI tile
-  // no longer exists.
-  currentAiTileIds: Set<string>;
+  // Profile city used to filter stale anchors. An anchor created under
+  // a previous city (e.g. SF) is hidden once the user moves to a new
+  // city (e.g. Austin) so the routine grid doesn't surface
+  // wrong-location suggestions. null when no profile city is set.
+  currentCity: string | null;
 };
 
 type SlottedAnchor = {
@@ -33,33 +33,25 @@ type SlottedAnchor = {
   emoji: string;
 };
 
-// Static starter tasks have stable source IDs across profile changes.
-// Anything else is AI-generated and only valid if still in the cache.
-function isStaticSourceId(id: string): boolean {
-  return (
-    id.startsWith("w1-") ||
-    id.startsWith("m1-") ||
-    id.startsWith("q1-") ||
-    id.startsWith("deepen:")
-  );
+function normalizeCity(s: string | null | undefined): string {
+  return (s ?? "").trim().toLowerCase();
 }
 
-export function Quarter1Section({ allTasks, currentAiTileIds }: Props) {
+export function Quarter1Section({ allTasks, currentCity }: Props) {
   // Find all anchors (kept tasks) regardless of phase. A user's anchor
-  // could come from Month 1 or from a custom For You task.
+  // could come from Month 1, pre-move, "Load more" extras, or static
+  // starter tasks.
   //
-  // Filter out stale AI-tile-sourced anchors: when a user changes
-  // city/profile, the AI cache regenerates with new tile IDs. Any
-  // anchor whose sourceItemId references a tile that's no longer in
-  // the cache is from a previous profile and would render with stale
-  // (e.g. wrong-city) details in the routine grid. Static starter
-  // anchors (w1-/m1-/q1-/deepen:) bypass the filter — they're stable
-  // across profile changes.
+  // City filter: AI-tile-sourced tasks carry the user's city at add
+  // time (createdCity). Hide them if that city no longer matches the
+  // current profile city so a city change doesn't leak wrong-location
+  // anchors into the routine grid. Static starter tasks and rows that
+  // pre-date the createdCity column (null) bypass the filter.
+  const current = normalizeCity(currentCity);
   const anchors = allTasks.filter((t) => {
     if (t.keeperState !== "keep") return false;
-    if (!t.sourceItemId) return true;
-    if (isStaticSourceId(t.sourceItemId)) return true;
-    return currentAiTileIds.has(t.sourceItemId);
+    if (!t.createdCity) return true;
+    return normalizeCity(t.createdCity) === current;
   });
 
   // Bucket each anchor by routine slot. Anchors whose routing is `null`

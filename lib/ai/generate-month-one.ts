@@ -1,9 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import type { ForYouItemType } from "@/lib/for-you-data";
-import type { Profile } from "@/lib/types";
+import type { Profile, Task } from "@/lib/types";
 
-import { readCachedSuggestions, writeCachedSuggestions } from "./cache";
+import {
+  readCachedSuggestions,
+  writeCachedSuggestions,
+} from "./cache";
 import { ANTHROPIC_MODEL, USE_FAKE_AI } from "./config";
 import { profileFingerprint } from "./fingerprint";
 import { stripCitations, stripCitationsOptional } from "./sanitize";
@@ -21,6 +24,49 @@ const VALID_TYPES = new Set<ForYouItemType>([
   "community",
   "resource",
 ]);
+
+// ============================================================
+// Render-time safety net
+// ============================================================
+// Wraps getOrGenerateMonth1Tiles with a check: if any of the user's
+// goals has fewer than 3 visible (non-kept) tiles in the cache AND has
+// at least one kept tile (which should have triggered a backfill via
+// setKeeperStateAction's `after()` callback), inline a single backfill
+// and re-read the cache. Catches the race where the user reloads /plan
+// before the background backfill from Keep has finished.
+//
+// One backfill per render to stay within the function timeout budget.
+// Subsequent reloads pick up any remaining gaps (rare for typical use).
+
+export async function ensureMonth1TilesAreBackfilled(
+  userId: string,
+  profile: Profile,
+  tasks: Task[],
+): Promise<SurfaceResult<AiMonth1Tile[]>> {
+  let result = await getOrGenerateMonth1Tiles(userId, profile);
+  if (result.status !== "ok" || profile.goals.length === 0) return result;
+
+  const keptIds = new Set<string>();
+  for (const t of tasks) {
+    if (t.keeperState === "keep" && t.sourceItemId) {
+      keptIds.add(t.sourceItemId);
+    }
+  }
+  if (keptIds.size === 0) return result;
+
+  for (const goal of profile.goals) {
+    const goalTiles = result.data.filter((t) => t.cluster === goal);
+    const nonKept = goalTiles.filter((t) => !keptIds.has(t.id));
+    const keptInGoal = goalTiles.find((t) => keptIds.has(t.id));
+    if (nonKept.length < 3 && keptInGoal) {
+      await backfillKeptMonth1Tile(userId, profile, keptInGoal.id);
+      result = await getOrGenerateMonth1Tiles(userId, profile);
+      break;
+    }
+  }
+
+  return result;
+}
 
 // ============================================================
 // Public entry point
@@ -476,6 +522,68 @@ Produce exactly 3 tiles whose "cluster" field equals "${goal}" verbatim. These a
       cacheHit: false,
     },
   };
+}
+
+// ============================================================
+// Backfill — replace a kept tile with a fresh one in the same goal
+// ============================================================
+// Called from setKeeperStateAction when the user clicks "Keep it" on a
+// Month 1 AI tile. The kept tile disappears from "Try things" (rendered
+// as keptState="keep" → filtered out at render time in Month1Section).
+// This function fetches one fresh tile for the same goal and appends
+// it to the cache so the user always sees three tiles per goal.
+//
+// Best-effort: fails silently on no-cache / daily-limit / generation
+// error. The Keep action itself never fails because the backfill did —
+// the user keeps the tile either way; they just don't get a replacement.
+export async function backfillKeptMonth1Tile(
+  userId: string,
+  profile: Profile,
+  keptTileId: string,
+): Promise<void> {
+  const surface = "month_1" as const;
+  const fingerprint = profileFingerprint(profile, surface);
+
+  const cached = await readCachedSuggestions(userId, surface, fingerprint);
+  if (!cached) return;
+
+  const existingTiles = cached.content as unknown as AiMonth1Tile[];
+  const keptTile = existingTiles.find((t) => t.id === keptTileId);
+  if (!keptTile) return;
+  const goal = keptTile.cluster;
+  if (!profile.goals.includes(goal)) return;
+
+  const excludeIds = existingTiles.map((t) => t.id);
+  const result = await generateMoreTilesForGoal(
+    userId,
+    profile,
+    goal,
+    excludeIds,
+  );
+  if (result.status !== "ok" || result.data.length === 0) return;
+
+  // Pick the first fresh tile. We only need one — the others would
+  // bloat the cache. The 1-tile generation cost is the same as the
+  // 3-tile cost (single Claude turn with web_search), so this is fine.
+  const newTile = result.data[0];
+  const augmented = [...existingTiles, newTile];
+
+  // Insert as a new cache row. readCachedSuggestions picks the most
+  // recent, so this superceds the previous content array.
+  try {
+    await writeCachedSuggestions({
+      userId,
+      surface,
+      profileHash: fingerprint,
+      suggestions: augmented as unknown as AiSuggestion[],
+      model: cached.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      searchCount: 0,
+    });
+  } catch {
+    // Same best-effort posture as the surrounding flow.
+  }
 }
 
 // ============================================================

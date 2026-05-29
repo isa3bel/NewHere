@@ -12,7 +12,7 @@ import { AiFailureBanner } from "./AiFailureBanner";
 export const maxDuration = 60;
 import { PlanView } from "./PlanView";
 import type { PreMoveTile } from "./PlanView";
-import { getOrGenerateMonth1Tiles } from "@/lib/ai/generate-month-one";
+import { ensureMonth1TilesAreBackfilled } from "@/lib/ai/generate-month-one";
 import { getOrGeneratePreMoveSuggestions } from "@/lib/ai/generate-pre-move";
 import { getOrGenerateWeekOneOverlay } from "@/lib/ai/generate-week-one";
 import { toForYouItem } from "@/lib/ai/types";
@@ -106,7 +106,7 @@ export default async function PlanPage() {
           data: [] as AiWeekOneDetail[],
         } as const),
     profile
-      ? getOrGenerateMonth1Tiles(user.id, profile)
+      ? ensureMonth1TilesAreBackfilled(user.id, profile, tasks)
       : Promise.resolve({ status: "ok", data: [] as AiMonth1Tile[] } as const),
   ]);
 

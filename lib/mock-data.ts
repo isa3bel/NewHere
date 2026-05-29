@@ -27,7 +27,10 @@ export const mockPlan: Plan = {
 // Meets PRD acceptance criterion: ≥5 / ≥8 / ≥8
 // keeperState + sourceItemId are defaulted at insert time so the seed
 // data doesn't need to repeat them on every entry.
-export const mockTasks: Omit<Task, "keeperState" | "sourceItemId" | "detailsJson">[] = [
+export const mockTasks: Omit<
+  Task,
+  "keeperState" | "sourceItemId" | "detailsJson" | "createdCity"
+>[] = [
   // -------- Week 1 (days 0–6): administrative + setup essentials --------
   {
     id: "w1-license",

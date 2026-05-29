@@ -67,6 +67,7 @@ export default function SamplePage() {
       // constraint isn't a concern.
       sourceItemId: mt.id,
       detailsJson: null,
+      createdCity: sampleCity,
     };
   });
 

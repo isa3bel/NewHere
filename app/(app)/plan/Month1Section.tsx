@@ -75,6 +75,32 @@ export function Month1Section({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [, startTransition] = useTransition();
 
+  // Snapshot of the visible tile set per goal, captured at mount time.
+  // Once a user clicks "Keep it" mid-session, the server updates the
+  // suggestion cache (kept tile stays, fresh backfill tile appended)
+  // and revalidates — which re-renders this component with new aiTiles
+  // props. We deliberately ignore that on subsequent renders: the user
+  // sees the kept tile remain in place until they refresh the page,
+  // at which point this snapshot rebuilds against the backfilled cache
+  // (kept tile filtered out, fresh tile slotted in).
+  //
+  // useState's lazy initializer captures the first-render closure
+  // (aiTiles + taskMap + goals) and never re-runs.
+  const [snapshotByGoal] = useState<Map<string, Month1Suggestion[]>>(() => {
+    const m = new Map<string, Month1Suggestion[]>();
+    for (const goal of goals) {
+      const tilesForGoal: Month1Suggestion[] = [];
+      for (const s of aiTiles) {
+        if (s.tile.cluster === goal) tilesForGoal.push(s);
+      }
+      const visible = tilesForGoal
+        .filter((s) => taskMap[s.tile.id]?.keeperState !== "keep")
+        .slice(0, 3);
+      m.set(goal, visible);
+    }
+    return m;
+  });
+
   const extrasFlat = Object.values(extras).flat();
   const total = useAi ? aiTiles.length + extrasFlat.length : tasks.length;
 
@@ -167,7 +193,11 @@ export function Month1Section({
       <div className="mt-6 space-y-8">
         {useAi ? (
           goals.map((goal) => {
-            const goalTiles = aiByGoal.get(goal) ?? [];
+            // Always render the mount-time snapshot. The kept-tile
+            // hide + backfill swap only takes effect after a full page
+            // reload (when this component remounts and the snapshot
+            // is rebuilt from the freshly-cached tiles).
+            const goalTiles = snapshotByGoal.get(goal) ?? [];
             const goalExtras = extras[goal] ?? [];
             if (goalTiles.length === 0 && goalExtras.length === 0) return null;
             const isLoading = loadingGoal === goal;
@@ -185,11 +215,17 @@ export function Month1Section({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
                   {goalTiles.map((s) => {
                     const backing = taskMap[s.tile.id];
+                    // Derive `completed` from live taskMap, not from
+                    // the snapshotted Month1Suggestion (which freezes
+                    // at false on mount and never updates). The only
+                    // way to create a backing task on a Month 1 AI
+                    // tile is "✓ done", so backing-exists implies
+                    // completed — same as the extras branch below.
                     return (
                       <Month1AiTile
                         key={s.tile.id}
                         tile={s.tile}
-                        completed={s.completed}
+                        completed={!!backing}
                         taskId={backing?.taskId ?? null}
                         keeperState={backing?.keeperState ?? null}
                       />
@@ -210,6 +246,13 @@ export function Month1Section({
                       />
                     );
                   })}
+                  {isLoading && (
+                    <>
+                      <SkeletonTile />
+                      <SkeletonTile />
+                      <SkeletonTile />
+                    </>
+                  )}
                 </div>
                 <div className="mt-3 flex items-center gap-3 min-h-5">
                   {!alreadyLoaded && (
@@ -217,9 +260,12 @@ export function Month1Section({
                       type="button"
                       onClick={() => handleLoadMore(goal)}
                       disabled={isLoading || anotherInFlight}
-                      className="text-xs text-[var(--muted-foreground)] underline-offset-2 hover:underline hover:text-[var(--accent)] disabled:opacity-50 disabled:cursor-wait"
+                      className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] underline-offset-2 hover:underline hover:text-[var(--accent)] disabled:opacity-50 disabled:cursor-wait"
                     >
-                      {isLoading ? "Finding more…" : "+ Load more"}
+                      {isLoading && <Spinner />}
+                      {isLoading
+                        ? "Searching the web for more…"
+                        : "+ Load more"}
                     </button>
                   )}
                   {err && (
@@ -335,6 +381,57 @@ function Stat({
         {label}
       </span>
     </div>
+  );
+}
+
+// Placeholder tile shown while a "Load more" call is in flight. Matches
+// the rough shape of Month1AiTile (icon block + title + meta lines) so
+// the grid doesn't reflow when real tiles arrive.
+function SkeletonTile() {
+  return (
+    <div
+      className="rounded-2xl border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col animate-pulse"
+      aria-hidden
+    >
+      <div className="p-4 flex items-start gap-3">
+        <div className="h-14 w-14 flex-shrink-0 rounded-xl bg-[var(--muted)]" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="h-3.5 rounded bg-[var(--muted)] w-5/6" />
+          <div className="h-3 rounded bg-[var(--muted)] w-4/6" />
+          <div className="h-3 rounded bg-[var(--muted)] w-3/6 mt-3" />
+        </div>
+      </div>
+      <div className="px-4 py-3 border-t border-[var(--border)]">
+        <div className="h-6 w-16 rounded-full bg-[var(--muted)]" />
+      </div>
+    </div>
+  );
+}
+
+// Small inline spinner used in the "Searching the web…" button label.
+function Spinner() {
+  return (
+    <svg
+      className="h-3 w-3 animate-spin"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="3"
+        opacity="0.25"
+      />
+      <path
+        d="M22 12a10 10 0 0 1-10 10"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

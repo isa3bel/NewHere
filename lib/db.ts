@@ -61,6 +61,7 @@ type TaskRow = {
   keeper_state: KeeperState;
   source_item_id: string | null;
   details_json: unknown | null;
+  created_city: string | null;
 };
 
 type BadgeRow = {
@@ -124,6 +125,7 @@ function rowToTask(r: TaskRow): Task {
     keeperState: r.keeper_state,
     sourceItemId: r.source_item_id,
     detailsJson: r.details_json,
+    createdCity: r.created_city,
   };
 }
 
@@ -408,6 +410,7 @@ export async function createTaskFromForYou(
   item: ForYouItem,
   currentDay: number,
   phaseOverride?: Phase,
+  createdCity?: string | null,
 ): Promise<Task> {
   const supabase = await createSupabaseServerClient();
 
@@ -456,6 +459,9 @@ export async function createTaskFromForYou(
       // Persist the whole item so the detail panel can render the rich
       // content the user already saw in the pre-move dropdown.
       details_json: item,
+      // Snapshot the user's city at add time so Quarter 1 routine can
+      // filter out anchors from a previous city.
+      created_city: createdCity ?? null,
     })
     .select()
     .single();

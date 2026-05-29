@@ -115,6 +115,11 @@ export type Task = {
   // description, links, meta) the user already saw. Null for standard
   // plan tasks.
   detailsJson: unknown | null;
+  // User's profile city at the moment this task was added. Used by
+  // Quarter 1 "Your routine" to hide anchors created under a previous
+  // city when the user moves. Null for static starter tasks and rows
+  // that pre-date this column (treated as "always show").
+  createdCity: string | null;
 };
 
 export type BadgeCriteria =

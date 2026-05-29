@@ -8,6 +8,7 @@ function withCompleted(ids: string[]): Task[] {
       keeperState: "none",
       sourceItemId: null,
       detailsJson: null,
+      createdCity: null,
       ...t,
     };
     return ids.includes(t.id)

@@ -125,12 +125,14 @@ export function getRoutingForAnchor(task: Task): AnchorRouting {
 // "Saturday mornings" into one of the four routine slots. Returns
 // null when we can't tell — caller falls back to the category default.
 //
-// Looks for two signals independently:
-//   - day class:  weekend (sat/sun/weekend) vs weekday (mon–fri/weekday)
-//   - time class: morning (am, "morning", hours 5–11) vs evening
-//                 (pm, "evening", "night", "dinner", hours 12+)
-// If a day signal is missing, defaults to weekday. If a time signal is
-// missing, defaults to evening (community/hobby tend to be evening).
+// Two signals: day class (weekend vs weekday) and time class (morning
+// vs evening). Tiebreaker priority for ambiguous time:
+//   1. Explicit semantic words ("brunch" / "dinner") win outright.
+//   2. If both am and pm numeric hours appear (e.g. "open 6am–9pm"),
+//      the FIRST mentioned time wins — schedules typically lead with
+//      the activity's primary time.
+//   3. Otherwise the present signal wins; if none, fall through to
+//      category default at the caller.
 export function inferSlotFromSchedule(text: string): RoutineSlot | null {
   const s = text.toLowerCase();
 
@@ -145,40 +147,44 @@ export function inferSlotFromSchedule(text: string): RoutineSlot | null {
   // and pick weekday (more frequent slots in the routine grid).
   const isWeekend = weekendMention && !weekdayMention;
 
-  const morningWord = /\b(morning|breakfast|early)\b/.test(s);
+  const morningWord = /\b(morning|breakfast|brunch|early|sunrise|dawn)\b/.test(s);
   const eveningWord =
-    /\b(evening|night|nights|dinner|afternoon|late)\b/.test(s);
+    /\b(evening|night|nights|dinner|afternoon|late|sunset)\b/.test(s);
 
-  // Explicit am / pm with a leading hour, e.g. "7pm", "6:30am".
-  const amMatch = /\b(\d{1,2})(?::\d{2})?\s*am\b/.exec(s);
-  const pmMatch = /\b(\d{1,2})(?::\d{2})?\s*pm\b/.exec(s);
-
-  let morning = morningWord || !!amMatch;
-  let evening = eveningWord || !!pmMatch;
-
-  // pm 12 = noon (treat as afternoon → evening), pm 1–4 = afternoon
-  // → evening. am 5–11 = morning. Edge case: 12am = midnight (skip).
-  if (amMatch) {
-    const hr = parseInt(amMatch[1], 10);
-    if (hr >= 5 && hr <= 11) morning = true;
-  }
-  if (pmMatch) {
-    const hr = parseInt(pmMatch[1], 10);
-    if (hr === 12 || (hr >= 1 && hr <= 11)) evening = true;
+  // Find every am/pm token in order so we know which one came first.
+  const ampmRegex = /\b(\d{1,2})(?::\d{2})?\s*(am|pm)\b/g;
+  let firstTimeIsAm: boolean | null = null;
+  let morningHour = false;
+  let eveningHour = false;
+  let m: RegExpExecArray | null;
+  while ((m = ampmRegex.exec(s)) !== null) {
+    const hr = parseInt(m[1], 10);
+    const isAm = m[2] === "am";
+    if (firstTimeIsAm === null) firstTimeIsAm = isAm;
+    if (isAm && hr >= 5 && hr <= 11) morningHour = true;
+    if (!isAm && (hr === 12 || (hr >= 1 && hr <= 11))) eveningHour = true;
   }
 
-  // Bare numeric "10am" without leading word boundary was caught above.
-  // We also accept "10–11am" and "10:30 AM" via the same regex.
+  const morning = morningWord || morningHour;
+  const evening = eveningWord || eveningHour;
 
   // Couldn't classify at all → bail so caller uses category default.
   if (!weekendMention && !weekdayMention && !morning && !evening) {
     return null;
   }
 
-  // Time tiebreaker: if both morning and evening words appear, prefer
-  // evening (gym/club sessions tend to be after work even if they
-  // mention an am variant).
-  const isMorning = morning && !evening;
+  let isMorning: boolean;
+  if (morningWord && !eveningWord) {
+    isMorning = true;
+  } else if (eveningWord && !morningWord) {
+    isMorning = false;
+  } else if (morning && evening) {
+    // Both am and pm hours appear (e.g. "open 6am–9pm"). First mention
+    // typically describes when the activity starts.
+    isMorning = firstTimeIsAm === true;
+  } else {
+    isMorning = morning && !evening;
+  }
 
   if (isWeekend) return isMorning ? "weekend_morning" : "weekend_evening";
   return isMorning ? "weekday_morning" : "weekday_evening";

@@ -3,9 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import { invalidateCachedSuggestions } from "@/lib/ai/cache";
-import { generateMoreTilesForGoal } from "@/lib/ai/generate-month-one";
+import {
+  backfillKeptMonth1Tile,
+  generateMoreTilesForGoal,
+} from "@/lib/ai/generate-month-one";
 import type { AiMonth1Tile } from "@/lib/ai/types";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { CELEBRATION_COOKIE } from "@/lib/celebration";
@@ -103,9 +107,43 @@ export async function setKeeperStateAction(args: {
   taskId: string;
   state: KeeperState;
 }) {
-  await requireUser();
-  await setTaskKeeperState(args.taskId, args.state);
+  const user = await requireUser();
+  const task = await setTaskKeeperState(args.taskId, args.state);
+
+  // Backfill runs in the background via after() so the user sees an
+  // instant routine update on Keep instead of waiting 10-30s for the
+  // Claude+web_search call that fills the replacement tile. The tile
+  // slot in "Try things" gets refilled on the user's next page reload
+  // (the snapshot pattern in Month1Section already defers visible
+  // changes to mount-time anyway).
+  if (
+    args.state === "keep" &&
+    task &&
+    task.sourceItemId &&
+    !isStaticSourceId(task.sourceItemId)
+  ) {
+    const sourceItemId = task.sourceItemId;
+    after(async () => {
+      const profile = await getProfile(user.id);
+      if (profile) {
+        await backfillKeptMonth1Tile(user.id, profile, sourceItemId);
+      }
+    });
+  }
+
   revalidatePath("/plan");
+}
+
+// Identifies static starter tasks by source id prefix. These come from
+// mockTasks / deepening templates and don't have AI-tile equivalents
+// in the suggestion cache to backfill.
+function isStaticSourceId(id: string): boolean {
+  return (
+    id.startsWith("w1-") ||
+    id.startsWith("m1-") ||
+    id.startsWith("q1-") ||
+    id.startsWith("deepen:")
+  );
 }
 
 export async function dismissCelebrationAction() {
@@ -267,6 +305,7 @@ export async function addForYouToPlanAction(args: {
     args.item,
     currentDay,
     args.phase,
+    profile?.city ?? null,
   );
 
   revalidatePath("/plan");
@@ -298,6 +337,7 @@ export async function markForYouCompletedAction(args: {
     args.item,
     currentDay,
     args.phase,
+    profile?.city ?? null,
   );
 
   // Now flip to done. Routes through badge evaluation so any milestones

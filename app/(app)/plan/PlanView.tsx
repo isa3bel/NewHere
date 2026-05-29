@@ -165,20 +165,6 @@ export function PlanView({
   const overlayForTask = (t: Task): AiWeekOneDetail | undefined =>
     t.sourceItemId ? overlayBySlot.get(t.sourceItemId) : undefined;
 
-  // Source IDs of every tile currently in the AI cache for this profile.
-  // Quarter 1 "Your routine" uses this to filter out stale anchors —
-  // e.g. tasks kept under a previous city whose AI tile no longer
-  // exists. Static starter tasks (w1-/m1-/q1-/deepen:) bypass the
-  // filter inside Quarter1Section.
-  const currentAiTileIds = useMemo(
-    () =>
-      new Set<string>([
-        ...preMoveSuggestions.map((p) => p.item.id),
-        ...month1Suggestions.map((s) => s.tile.id),
-      ]),
-    [preMoveSuggestions, month1Suggestions],
-  );
-
   return (
     <div className="lg:flex lg:gap-6">
       <div
@@ -323,7 +309,7 @@ export function PlanView({
                       tasks={phaseTasks}
                       allTasks={tasks}
                       focusIds={focusIds}
-                      currentAiTileIds={currentAiTileIds}
+                      currentCity={city}
                     />
                   ) : (
                     <ul className="space-y-3">
