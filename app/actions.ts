@@ -8,6 +8,7 @@ import { after } from "next/server";
 import { invalidateCachedSuggestions } from "@/lib/ai/cache";
 import {
   backfillKeptMonth1Tile,
+  ensureMonth1TileInCache,
   generateMoreTilesForGoal,
 } from "@/lib/ai/generate-month-one";
 import type { AiMonth1Tile } from "@/lib/ai/types";
@@ -272,6 +273,13 @@ export async function markForYouCompletedAction(args: {
   item: ForYouItem;
   interest: string;
   phase?: Phase;
+  // For Month 1 AI tiles only: the full AiMonth1Tile object (carries
+  // `cluster`, `imageUrl`, etc. that aren't in ForYouItem). When
+  // present, the tile is persisted to the Month 1 cache so the kept
+  // anchor passes the routine's currentAiTileIds filter — needed
+  // specifically for "Load more" extras whose tile.id otherwise
+  // wouldn't be in any cache.
+  monthOneTile?: AiMonth1Tile;
 }) {
   const user = await requireUser();
   const [profile, plan] = await Promise.all([
@@ -321,7 +329,15 @@ export async function markForYouCompletedAction(args: {
     const sourceItemId = task.sourceItemId;
     const userId = user.id;
     const userProfile = profile;
+    const tileForCache = args.monthOneTile;
     after(async () => {
+      // Sequential: persist the engaged tile to cache first (no-op
+      // for initial tiles that are already there; the meaningful
+      // case is load-more extras). Then backfill so the replacement
+      // generator can find the engaged tile's cluster in cache.
+      if (tileForCache) {
+        await ensureMonth1TileInCache(userId, userProfile, tileForCache);
+      }
       await backfillKeptMonth1Tile(userId, userProfile, sourceItemId);
     });
   }

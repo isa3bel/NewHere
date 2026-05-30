@@ -26,29 +26,111 @@ const VALID_TYPES = new Set<ForYouItemType>([
 ]);
 
 // ============================================================
-// Render-time entry (no inline backfill)
+// Render-time safety net (recency-gated)
 // ============================================================
-// Returns the cached Month 1 tiles. Replacement tiles for engaged
-// (done / kept) tiles are produced exclusively by the background
-// `after()` callback in markForYouCompletedAction — running them
-// inline here made every Done / Keep click block the page re-render
-// for ~15-30s while a fresh Claude+web_search call ran. The user
-// trade-off: if you reload faster than the background backfill
-// completes (~15-30s), you may see 2 tiles in that goal instead of
-// 3. The next reload picks up the cached replacement.
+// Reads the Month 1 cache, then for every goal short of 3 non-engaged
+// (no backing task) tiles AND with at least one engaged tile, runs a
+// fresh backfill inline. Catches the case where the background
+// `after()` backfill from markForYouCompletedAction silently failed
+// (daily limit hit, duplicate-only generation, etc.) so a stale cache
+// hit still recovers on the user's next reload.
 //
-// `tasks` is unused but kept on the signature so callers don't have
-// to thread fewer args; this also leaves room to reintroduce
-// targeted backfill (e.g. only when no recent task activity) without
-// another API change.
+// Gated by recency: if any task was completed in the last 30 seconds,
+// skip the inline backfill — assume the after() from that Done click
+// is still running and don't block the page re-render for the user
+// who just clicked. The next reload (typically a few minutes later)
+// will pick it up if after() failed.
+
+const RECENT_TASK_ACTIVITY_WINDOW_MS = 30_000;
 
 export async function ensureMonth1TilesAreBackfilled(
   userId: string,
   profile: Profile,
-  _tasks: Task[],
+  tasks: Task[],
 ): Promise<SurfaceResult<AiMonth1Tile[]>> {
-  void _tasks;
-  return getOrGenerateMonth1Tiles(userId, profile);
+  const result = await getOrGenerateMonth1Tiles(userId, profile);
+  if (result.status !== "ok" || profile.goals.length === 0) return result;
+
+  const engagedIds = new Set<string>();
+  for (const t of tasks) {
+    if (t.sourceItemId) engagedIds.add(t.sourceItemId);
+  }
+  if (engagedIds.size === 0) return result;
+
+  // Skip the inline path if the user just clicked Done/Keep — the
+  // after() callback is handling it in the background and blocking the
+  // re-render here would make every click feel ~15s slow.
+  const now = Date.now();
+  const hasRecentActivity = tasks.some((t) => {
+    if (!t.completedAt) return false;
+    return now - new Date(t.completedAt).getTime() < RECENT_TASK_ACTIVITY_WINDOW_MS;
+  });
+  if (hasRecentActivity) return result;
+
+  const goalsNeedingBackfill: string[] = [];
+  for (const goal of profile.goals) {
+    const goalTiles = result.data.filter((t) => t.cluster === goal);
+    const nonEngaged = goalTiles.filter((t) => !engagedIds.has(t.id));
+    const engagedInGoal = goalTiles.some((t) => engagedIds.has(t.id));
+    if (nonEngaged.length < 3 && engagedInGoal) {
+      goalsNeedingBackfill.push(goal);
+    }
+  }
+
+  if (goalsNeedingBackfill.length === 0) return result;
+
+  // Generate one replacement per needy goal in parallel — ~30s total
+  // for the slowest, not 30s × N.
+  const existingIds = result.data.map((t) => t.id);
+  const genResults = await Promise.all(
+    goalsNeedingBackfill.map((goal) =>
+      generateMoreTilesForGoal(userId, profile, goal, existingIds),
+    ),
+  );
+
+  const newTiles: AiMonth1Tile[] = [];
+  for (const gr of genResults) {
+    if (gr.status === "ok" && gr.data.length > 0) {
+      newTiles.push(gr.data[0]);
+    }
+  }
+  if (newTiles.length === 0) return result;
+
+  // Single combined cache write. Re-read at write time so any tiles
+  // an in-flight after() wrote get merged in; dedupe by id.
+  const surface = "month_1" as const;
+  const fingerprint = profileFingerprint(profile, surface);
+  const cachedAtWrite = await readCachedSuggestions(
+    userId,
+    surface,
+    fingerprint,
+  );
+  if (!cachedAtWrite) return result;
+
+  const merged = new Map<string, AiMonth1Tile>();
+  for (const t of cachedAtWrite.content as unknown as AiMonth1Tile[]) {
+    merged.set(t.id, t);
+  }
+  for (const t of newTiles) {
+    merged.set(t.id, t);
+  }
+
+  try {
+    await writeCachedSuggestions({
+      userId,
+      surface,
+      profileHash: fingerprint,
+      suggestions: Array.from(merged.values()) as unknown as AiSuggestion[],
+      model: cachedAtWrite.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      searchCount: 0,
+    });
+  } catch {
+    // Best-effort.
+  }
+
+  return await getOrGenerateMonth1Tiles(userId, profile);
 }
 
 // ============================================================
@@ -506,6 +588,54 @@ Produce exactly 3 tiles whose "cluster" field equals "${goal}" verbatim. These a
       cacheHit: false,
     },
   };
+}
+
+// ============================================================
+// Persist an engaged tile to the cache (e.g. load-more extra)
+// ============================================================
+// Initial AI tiles are already in the cache. Load-more extras (in
+// client state only) aren't — so when the user marks one done and
+// keeps it, the routine's currentAiTileIds filter doesn't recognize
+// it and hides it. This helper appends the tile so the user's
+// engagement makes it persistent. Initial tiles are no-ops (already
+// in cache by id).
+//
+// Safe to call from a fire-and-forget after() callback alongside
+// backfillKeptMonth1Tile; running it first means the backfill can
+// then find the engaged tile's cluster in the cache.
+export async function ensureMonth1TileInCache(
+  userId: string,
+  profile: Profile,
+  tile: AiMonth1Tile,
+): Promise<void> {
+  const surface = "month_1" as const;
+  const fingerprint = profileFingerprint(profile, surface);
+
+  const cached = await readCachedSuggestions(userId, surface, fingerprint);
+  if (!cached) return;
+
+  const existing = cached.content as unknown as AiMonth1Tile[];
+  if (existing.some((t) => t.id === tile.id)) return;
+
+  // Defensive — only persist tiles for the user's current goals so
+  // a stale extra from a previous profile state can't leak in.
+  if (!profile.goals.includes(tile.cluster)) return;
+
+  const augmented = [...existing, tile];
+  try {
+    await writeCachedSuggestions({
+      userId,
+      surface,
+      profileHash: fingerprint,
+      suggestions: augmented as unknown as AiSuggestion[],
+      model: cached.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      searchCount: 0,
+    });
+  } catch {
+    // Best-effort.
+  }
 }
 
 // ============================================================

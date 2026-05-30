@@ -210,6 +210,18 @@ export function Month1Section({
             const err = errors[goal];
             const anotherInFlight =
               loadingGoal !== null && loadingGoal !== goal;
+            // Pad short goals (cache didn't provide / backfill failed
+            // to fill 3 tiles) with placeholder cards so the user sees
+            // a message instead of an uneven grid with a missing tile.
+            // The skeleton tiles already cover the in-flight Load
+            // more case, so suppress placeholders during loading.
+            const TILES_PER_GOAL = 3;
+            const missingCount = isLoading
+              ? 0
+              : Math.max(
+                  0,
+                  TILES_PER_GOAL - goalTiles.length - goalExtras.length,
+                );
             return (
               <ClusterSection
                 key={goal}
@@ -258,6 +270,10 @@ export function Month1Section({
                       <SkeletonTile />
                     </>
                   )}
+                  {missingCount > 0 &&
+                    Array.from({ length: missingCount }).map((_, i) => (
+                      <MissingTileCard key={`missing-${goal}-${i}`} />
+                    ))}
                 </div>
                 <div className="mt-3 flex items-center gap-3 min-h-5">
                   {!alreadyLoaded && (
@@ -392,6 +408,32 @@ function Stat({
 // Placeholder tile shown while a "Load more" call is in flight. Matches
 // the rough shape of Month1AiTile (icon block + title + meta lines) so
 // the grid doesn't reflow when real tiles arrive.
+// Placeholder rendered in goal sections where a tile slot couldn't be
+// filled — usually because the background `after()` backfill from
+// markForYouCompletedAction silently failed (daily limit hit, Claude
+// returned all duplicates, etc.) and the inline safety net also
+// couldn't recover. Communicates the state rather than leaving an
+// uneven grid with a missing third tile.
+function MissingTileCard() {
+  return (
+    <article
+      className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--background)] overflow-hidden flex flex-col items-center justify-center p-5 text-center min-h-[180px]"
+      aria-label="Suggestion unavailable"
+    >
+      <span className="text-2xl mb-2" aria-hidden>
+        ⚠️
+      </span>
+      <p className="text-sm font-medium leading-snug">
+        Couldn&apos;t load a fresh suggestion
+      </p>
+      <p className="text-xs text-[var(--muted-foreground)] mt-1 leading-snug">
+        Refresh to try again, or check back tomorrow if you&apos;ve
+        hit today&apos;s limit.
+      </p>
+    </article>
+  );
+}
+
 function SkeletonTile() {
   return (
     <div

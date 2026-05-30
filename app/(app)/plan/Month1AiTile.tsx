@@ -57,6 +57,10 @@ export function Month1AiTile({
         item: forYouItem,
         interest,
         phase: "month_one",
+        // Pass the full tile so the server can persist load-more
+        // extras to the Month 1 cache; otherwise the kept extra
+        // won't pass the routine's cache-id filter.
+        monthOneTile: tile,
       }),
     );
   };

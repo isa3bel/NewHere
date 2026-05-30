@@ -147,9 +147,13 @@ export function inferSlotFromSchedule(text: string): RoutineSlot | null {
   // and pick weekday (more frequent slots in the routine grid).
   const isWeekend = weekendMention && !weekdayMention;
 
-  const morningWord = /\b(morning|breakfast|brunch|early|sunrise|dawn)\b/.test(s);
+  // Allow optional plurals — `\bmorning\b` doesn't match "mornings"
+  // because the boundary requires a non-word char after the 'g'. This
+  // was missing real-world AI output like "Regular mornings".
+  const morningWord =
+    /\b(mornings?|breakfasts?|brunches?|early|sunrises?|dawns?)\b/.test(s);
   const eveningWord =
-    /\b(evening|night|nights|dinner|afternoon|late|sunset)\b/.test(s);
+    /\b(evenings?|nights?|dinners?|afternoons?|late|sunsets?)\b/.test(s);
 
   // Find every am/pm token in order so we know which one came first.
   const ampmRegex = /\b(\d{1,2})(?::\d{2})?\s*(am|pm)\b/g;
@@ -203,3 +207,119 @@ export const SLOT_ORDER: RoutineSlot[] = [
   "weekend_morning",
   "weekend_evening",
 ];
+
+// ============================================================
+// Day-of-week scheduling — for the 7-day suggested-week calendar.
+// ============================================================
+// Fully deterministic — no AI involved. Anchors with explicit days in
+// their schedule string pin to that day (rotating between them when
+// the user reshuffles). Vague schedules fall back to slot-based
+// defaults (weekend slot → Sat/Sun, weekday slot → Mon-Fri).
+
+export type WeekDay = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+export const WEEK_DAYS: WeekDay[] = [
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+  "sat",
+  "sun",
+];
+
+export const WEEK_DAY_LABELS: Record<WeekDay, { short: string; long: string }> = {
+  mon: { short: "Mon", long: "Monday" },
+  tue: { short: "Tue", long: "Tuesday" },
+  wed: { short: "Wed", long: "Wednesday" },
+  thu: { short: "Thu", long: "Thursday" },
+  fri: { short: "Fri", long: "Friday" },
+  sat: { short: "Sat", long: "Saturday" },
+  sun: { short: "Sun", long: "Sunday" },
+};
+
+const WEEKDAYS: WeekDay[] = ["mon", "tue", "wed", "thu", "fri"];
+const WEEKEND_DAYS: WeekDay[] = ["sat", "sun"];
+
+// Find every day-of-week mentioned in a schedule string. Returns days
+// in chronological order (mon → sun) regardless of how they appeared
+// in the text, so the shuffle rotation is predictable.
+export function parseExplicitDays(text: string): WeekDay[] {
+  if (!text) return [];
+  const s = text.toLowerCase();
+  const days: WeekDay[] = [];
+  if (/\bmon(?:day)?s?\b/.test(s)) days.push("mon");
+  if (/\btue(?:s|sday)?s?\b/.test(s)) days.push("tue");
+  if (/\bwed(?:nesday)?s?\b/.test(s)) days.push("wed");
+  if (/\bthu(?:r|rs|rsday)?s?\b/.test(s)) days.push("thu");
+  if (/\bfri(?:day)?s?\b/.test(s)) days.push("fri");
+  if (/\bsat(?:urday)?s?\b/.test(s)) days.push("sat");
+  if (/\bsun(?:day)?s?\b/.test(s)) days.push("sun");
+  return days;
+}
+
+// Picks the day this anchor should show up on in the suggested-week
+// calendar. Seed-driven so the global "Reshuffle" button can rotate
+// anchors with multiple legitimate days. Anchors with one explicit
+// day always stay put.
+export function pickDayForAnchor(
+  slot: RoutineSlot,
+  schedule: string | undefined,
+  seed: number,
+): WeekDay {
+  return getDayCandidatesForAnchor(slot, schedule, seed)[0];
+}
+
+// Ordered list of days the anchor can legitimately occupy, most
+// preferred first. Used by the per-day cap logic — if the preferred
+// day is full, the caller walks to the next candidate. Seed rotates
+// the order so reshuffle moves multi-day anchors between their valid
+// options.
+//
+// - Explicit days from the schedule are the only candidates when
+//   present ("Tuesdays 7pm" → [tue], no flexibility).
+// - Multi-day anchors ("Mon/Wed/Fri") rotate through their days.
+// - Vague anchors fall back to all weekdays or all weekend days.
+export function getDayCandidatesForAnchor(
+  slot: RoutineSlot,
+  schedule: string | undefined,
+  seed: number,
+): WeekDay[] {
+  const explicit = parseExplicitDays(schedule ?? "");
+  if (explicit.length > 0) {
+    return rotateBySeed(explicit, seed);
+  }
+  const fallback =
+    slot === "weekend_morning" || slot === "weekend_evening"
+      ? WEEKEND_DAYS
+      : WEEKDAYS;
+  return rotateBySeed([...fallback], seed);
+}
+
+function rotateBySeed<T>(arr: T[], seed: number): T[] {
+  if (arr.length === 0) return arr;
+  const offset = Math.abs(seed) % arr.length;
+  return [...arr.slice(offset), ...arr.slice(0, offset)];
+}
+
+// Stable per-anchor seed offset so each anchor shuffles independently
+// when the global counter bumps. Tiny polynomial rolling hash.
+export function hashAnchorId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) | 0;
+  }
+  return h;
+}
+
+// Sort key for within-day ordering: morning before evening.
+export function slotSortKey(slot: RoutineSlot): number {
+  switch (slot) {
+    case "weekday_morning":
+    case "weekend_morning":
+      return 0;
+    case "weekday_evening":
+    case "weekend_evening":
+      return 1;
+  }
+}
