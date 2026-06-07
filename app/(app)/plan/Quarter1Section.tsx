@@ -59,8 +59,14 @@ type UnslottedAnchor = {
   emoji: string;
 };
 
+// Compare cities by their city name only, so freeform legacy values
+// ("Austin"), Mapbox canonical values ("Austin, Texas"), and any other
+// variant the user typed before the Mapbox autocomplete landed all
+// reduce to the same key. Splits on the first comma and lowercases.
 function normalizeCity(s: string | null | undefined): string {
-  return (s ?? "").trim().toLowerCase();
+  if (!s) return "";
+  const head = s.split(",")[0] ?? s;
+  return head.trim().toLowerCase();
 }
 
 function isStaticSourceId(id: string): boolean {

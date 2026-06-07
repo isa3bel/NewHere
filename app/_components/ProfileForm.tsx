@@ -1,5 +1,6 @@
 import { GoalsField } from "@/app/onboarding/GoalsField";
 import { InterestsField } from "@/app/onboarding/InterestsField";
+import { LocationFields } from "@/app/onboarding/LocationFields";
 import {
   GOAL_TAGS,
   INTEREST_TAGS,
@@ -69,30 +70,11 @@ export function ProfileForm({ existing, action, submitLabel }: Props) {
         />
       </Field>
 
-      <Field label="City you're moving to" required>
-        <input
-          type="text"
-          name="city"
-          required
-          defaultValue={existing?.city ?? ""}
-          placeholder="Austin, TX"
-          className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 outline-none focus:border-[var(--accent)]"
-        />
-      </Field>
-
-      <Field
-        label="Neighborhood"
-        hint="Optional — helps tailor super-local picks like which grocery store, coffee shop, or transit stop is closest to you."
-      >
-        <input
-          type="text"
-          name="neighborhood"
-          maxLength={80}
-          defaultValue={existing?.neighborhood ?? ""}
-          placeholder="e.g. Mission District, East Austin, Williamsburg"
-          className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 outline-none focus:border-[var(--accent)]"
-        />
-      </Field>
+      <LocationFields
+        defaultCity={existing?.city}
+        defaultNeighborhood={existing?.neighborhood}
+        mapboxEnabled={Boolean(process.env.MAPBOX_TOKEN)}
+      />
 
       <Field label="Move date" required>
         <input
