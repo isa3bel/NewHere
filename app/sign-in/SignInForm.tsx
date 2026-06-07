@@ -21,6 +21,12 @@ export function SignInForm({ next }: { next: string }) {
           We sent a sign-in link to <strong>{state.email}</strong>. Tap the
           link to finish signing in. You can close this tab.
         </p>
+        <p className="mt-4 text-xs text-[var(--muted-foreground)] bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-2">
+          ⚠️ Don&apos;t see it? <strong>Check your spam or junk folder</strong>{" "}
+          — magic links sometimes land there. If you find ours there,
+          marking it as &ldquo;not spam&rdquo; helps future links land
+          properly.
+        </p>
       </div>
     );
   }
