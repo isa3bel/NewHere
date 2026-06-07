@@ -148,10 +148,10 @@ function Hero() {
         {/* Photo collage — hidden on small screens to keep the hero tight. */}
         <div className="relative h-[440px] hidden lg:block">
           <PhotoTile
-            src="https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500&h=500&fit=crop&auto=format&q=80"
-            alt="Cozy coffee shop with a journal on the table"
+            src="https://plus.unsplash.com/premium_photo-1664302152991-d013ff125f3f?q=80&w=500&h=500&auto=format&fit=crop"
+            alt="Essential moving-day items laid out — the kind of setup you tackle in week 1"
             position="absolute top-0 left-0 w-44 h-44 -rotate-3"
-            tag="Week 1 · Becoming a regular"
+            tag="Week 1 · Set up essentials"
             tagColor="bg-yellow-200"
           />
           <PhotoTile
@@ -211,6 +211,46 @@ function PhotoTile({
           loading="lazy"
           className="w-full h-full object-cover rounded-2xl shadow-lg ring-1 ring-black/5"
         />
+        <span
+          className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 ${tagColor} text-gray-900 px-3 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap shadow-sm ring-1 ring-black/5`}
+        >
+          {tag}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Same shape as PhotoTile but renders a gradient block with a big
+// centered emoji instead of a hot-linked image. Used when there's no
+// obvious stock photo for the concept (e.g. "set up essentials").
+function IconTile({
+  emoji,
+  label,
+  position,
+  tag,
+  tagColor,
+  bgClassName,
+}: {
+  emoji: string;
+  label: string;
+  position: string;
+  tag: string;
+  tagColor: string;
+  bgClassName: string;
+}) {
+  return (
+    <div className={position}>
+      <div className="relative w-full h-full">
+        <div
+          role="img"
+          aria-label={label}
+          className={`w-full h-full rounded-2xl shadow-lg ring-1 ring-black/5 flex items-center justify-center ${bgClassName}`}
+        >
+          <span className="text-6xl" aria-hidden>
+            {emoji}
+          </span>
+        </div>
         <span
           className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 ${tagColor} text-gray-900 px-3 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap shadow-sm ring-1 ring-black/5`}
         >
