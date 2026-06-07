@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { toggleTaskAction } from "@/app/actions";
 import { uniqByUrl } from "@/lib/ai/sanitize";
@@ -82,7 +82,6 @@ export function PlanView({
 }: Props) {
   const isPreMove = currentDay < 0;
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const panelRef = useRef<HTMLElement>(null);
 
   // Phases the user has manually collapsed. We seed it with any past
   // phases so they're hidden by default (e.g. once you're past Week 1,
@@ -104,26 +103,12 @@ export function PlanView({
     });
   };
 
-  useEffect(() => {
-    if (!selectedId || !panelRef.current) return;
-    // Desktop only — on mobile the panel is a fixed-position bottom
-    // sheet, so no scroll is needed (and scrolling would push the list
-    // off-screen behind it).
-    if (
-      typeof window !== "undefined" &&
-      window.matchMedia("(min-width: 1024px)").matches
-    ) {
-      panelRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }, [selectedId]);
-
-  // Lock body scroll on mobile while the bottom sheet is open so the
+  // Lock body scroll while the detail drawer/sheet is open so the
   // underlying list stays anchored at the tapped task. Closing the
-  // sheet restores both scroll and visibility — no jump.
+  // panel restores both scroll and visibility — no jump.
   useEffect(() => {
     if (!selectedId) return;
     if (typeof window === "undefined") return;
-    if (!window.matchMedia("(max-width: 1023px)").matches) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -178,12 +163,8 @@ export function PlanView({
   );
 
   return (
-    <div className="lg:flex lg:gap-6">
-      <div
-        className={`w-full ${
-          selectedTask ? "lg:w-[28rem] lg:flex-shrink-0" : ""
-        }`}
-      >
+    <div>
+      <div className="w-full">
         {isPreMove ? (
           <section className="mb-12">
             <div className="flex items-baseline justify-between mb-1 gap-3">
@@ -346,16 +327,24 @@ export function PlanView({
 
       {selectedTask && (
         <>
-          {/* Backdrop — mobile only. Tap closes. */}
+          {/* Backdrop on all screen sizes — tap closes. The main
+              content stays full-width so its responsive grids never
+              reflow into a cramped column. */}
           <div
-            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+            className="fixed inset-0 z-40 bg-black/40"
             onClick={() => setSelectedId(null)}
             aria-hidden
           />
-          {/* Bottom sheet on mobile, inline side column on desktop. */}
-          <div className="fixed inset-x-0 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-2xl bg-[var(--background)] shadow-xl lg:static lg:inset-auto lg:max-h-none lg:overflow-visible lg:rounded-none lg:bg-transparent lg:shadow-none lg:flex-1 lg:min-w-0">
+          {/* Mobile: bottom sheet. Desktop (lg+): right-side drawer
+              that slides over the main content. Either way the panel
+              is fixed-positioned and doesn't affect the layout of
+              what's behind it. */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-2xl bg-[var(--background)] shadow-xl lg:inset-x-auto lg:bottom-0 lg:top-0 lg:right-0 lg:max-h-none lg:w-[28rem] lg:rounded-none lg:rounded-l-2xl"
+          >
             <TaskDetailPanel
-              ref={panelRef}
               task={selectedTask}
               aiDetail={overlayForTask(selectedTask)}
               onClose={() => setSelectedId(null)}
@@ -489,12 +478,10 @@ function TaskDetailPanel({
   task,
   aiDetail,
   onClose,
-  ref,
 }: {
   task: Task;
   aiDetail?: AiWeekOneDetail;
   onClose: () => void;
-  ref?: React.Ref<HTMLElement>;
 }) {
   const forYouSource = asForYouItem(task.detailsJson);
   const guide = getTaskGuide(task, aiDetail);
@@ -503,10 +490,7 @@ function TaskDetailPanel({
   const displayDescription = aiDetail?.descriptionOverride ?? task.description;
 
   return (
-    <aside
-      ref={ref}
-      className="rounded-2xl border-2 border-[var(--accent)] bg-[var(--card)] p-6 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto"
-    >
+    <aside className="p-6">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <div className="flex items-center gap-2 flex-wrap mb-2">
