@@ -5,6 +5,8 @@ import { createServerClient } from "@supabase/ssr";
 //   1. Refresh the Supabase auth cookie so the session stays alive.
 //   2. Gate access to the authenticated app — unsigned visitors hitting
 //      /plan, /profile, or /onboarding get redirected to /sign-in.
+//      /feedback is intentionally public so visitors can flag issues
+//      without having to sign up first.
 //
 // Adapted from Supabase's official @supabase/ssr docs.
 export async function updateSession(request: NextRequest) {
@@ -42,11 +44,13 @@ export async function updateSession(request: NextRequest) {
   // Auth-protected paths: must be signed in to access these.
   // /admin/* is gated additionally by requireAdmin() in the route itself
   // (email allowlist); middleware just forces a sign-in first.
+  // /feedback is intentionally NOT here — it's public so anyone can
+  // send feedback. The server action stores the user_id/email only if
+  // the visitor happens to be signed in.
   const requiresAuth =
     pathname.startsWith("/plan") ||
     pathname.startsWith("/profile") ||
     pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/feedback") ||
     pathname.startsWith("/admin");
 
   if (requiresAuth && !user) {

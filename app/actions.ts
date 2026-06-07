@@ -12,7 +12,7 @@ import {
   generateMoreTilesForGoal,
 } from "@/lib/ai/generate-month-one";
 import type { AiMonth1Tile } from "@/lib/ai/types";
-import { requireAdmin, requireUser } from "@/lib/auth";
+import { getCurrentUser, requireAdmin, requireUser } from "@/lib/auth";
 import { CELEBRATION_COOKIE } from "@/lib/celebration";
 import {
   createTaskFromForYou,
@@ -141,14 +141,18 @@ export type SubmitFeedbackResult =
   | { status: "ok" }
   | { status: "error"; message: string };
 
-// Records a feedback row from /feedback. Auth-only — user_id is taken
-// from the session and email is snapshotted at submit time so
-// downstream account-deletion doesn't erase the report's context.
+// Records a feedback row from /feedback. Public — signed-out visitors
+// can submit too. We still capture user_id + email when the visitor
+// happens to be signed in so the admin inbox shows context. Uses the
+// service-role client because the RLS policy on `feedback` requires
+// `auth.uid() = user_id`, which fails for anonymous (user_id null)
+// rows. Server-side input validation + length caps below act as the
+// spam guard; add a captcha later if abuse shows up.
 export async function submitFeedbackAction(
   _prev: SubmitFeedbackResult | null,
   formData: FormData,
 ): Promise<SubmitFeedbackResult> {
-  const user = await requireUser();
+  const user = await getCurrentUser();
   const category = formData.get("category") as FeedbackCategory | null;
   const message = ((formData.get("message") as string) || "").trim();
   const context = ((formData.get("context") as string) || "").trim() || null;
@@ -163,10 +167,10 @@ export async function submitFeedbackAction(
     return { status: "error", message: "Keep it under 4000 characters." };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("feedback").insert({
-    user_id: user.id,
-    user_email: user.email,
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("feedback").insert({
+    user_id: user?.id ?? null,
+    user_email: user?.email ?? null,
     category,
     message,
     context: context ? context.slice(0, 500) : null,
