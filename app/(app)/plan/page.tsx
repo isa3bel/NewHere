@@ -3,6 +3,7 @@ import Link from "next/link";
 import { dismissCelebrationAction } from "@/app/actions";
 
 import { AiFailureBanner } from "./AiFailureBanner";
+import { BadgeShelf } from "./BadgeShelf";
 import { DailyLimitBanner } from "./DailyLimitBanner";
 
 // Vercel default function timeout is 10s on Hobby, 15s on Pro. Real
@@ -29,6 +30,7 @@ import {
   getBadges,
   getProfile,
   getTasksForPlan,
+  getUserBadges,
 } from "@/lib/db";
 import {
   daysSinceMove,
@@ -40,13 +42,15 @@ import type { Badge, KeeperState } from "@/lib/types";
 
 export default async function PlanPage() {
   const user = await requireUser();
-  const [profile, plan, badges, dailyUsage] = await Promise.all([
+  const [profile, plan, badges, userBadges, dailyUsage] = await Promise.all([
     getProfile(user.id),
     getActivePlan(user.id),
     getBadges(),
+    getUserBadges(user.id),
     getDailyUsage(user.id),
   ]);
   const atDailyLimit = dailyUsage.count >= dailyUsage.limit;
+  const earnedBadgeIds = new Set(userBadges.map((ub) => ub.badgeId));
 
   if (!plan) {
     return (
@@ -171,6 +175,8 @@ export default async function PlanPage() {
         {celebratingBadges.length > 0 && (
           <CelebrationBanner badges={celebratingBadges} />
         )}
+
+        <BadgeShelf badges={badges} earnedIds={earnedBadgeIds} />
 
         <div className="mt-10">
           <PlanView

@@ -1,7 +1,8 @@
 import Link from "next/link";
 
+import { BadgeShelf } from "@/app/(app)/plan/BadgeShelf";
 import { PlanView } from "@/app/(app)/plan/PlanView";
-import { mockTasks } from "@/lib/mock-data";
+import { mockBadges, mockTasks } from "@/lib/mock-data";
 import {
   daysSinceMove,
   getTodaysFocus,
@@ -115,6 +116,17 @@ export default function SamplePage() {
             · {summary.detail}
           </p>
         </header>
+
+        <BadgeShelf
+          badges={mockBadges}
+          earnedIds={
+            new Set([
+              "b1", // First Step
+              "b3", // Showed Up
+              "b4", // Regular
+            ])
+          }
+        />
 
         <div className="mt-10">
           <PlanView
