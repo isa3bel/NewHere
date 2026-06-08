@@ -213,18 +213,21 @@ export function PlanView({
               <p className="text-sm text-[var(--muted-foreground)] mb-4">
                 The next steps that matter most right now.
               </p>
-              <ul className="space-y-3">
+              {/* items-stretch (the grid default) is intentional —
+                  every tile gets the same height as the tallest in its
+                  row regardless of description length. mt-auto inside
+                  FocusTile keeps the mark-done row pinned to the bottom. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {todaysFocus.map((task) => (
-                  <TaskRow
+                  <FocusTile
                     key={`focus-${task.id}`}
                     task={task}
                     aiDetail={overlayForTask(task)}
                     isSelected={task.id === selectedId}
                     onSelect={() => setSelectedId(task.id)}
-                    emphasis
                   />
                 ))}
-              </ul>
+              </div>
             </section>
           )
         )}
@@ -353,6 +356,107 @@ export function PlanView({
         </>
       )}
     </div>
+  );
+}
+
+// Today's focus uses a tile-card layout (vs. the horizontal TaskRow
+// stack below). Same interactions — click the body to open the detail
+// drawer, click the circle to mark done — but the layout matches the
+// "Try things" Month 1 grid so the page reads as one consistent
+// design system.
+function FocusTile({
+  task,
+  aiDetail,
+  isSelected,
+  onSelect,
+}: {
+  task: Task;
+  aiDetail?: AiWeekOneDetail;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const done = task.status === "done";
+  const nextStatus = done ? "pending" : "done";
+  const displayTitle = aiDetail?.titleOverride ?? task.title;
+  const displayDescription =
+    aiDetail?.descriptionOverride ?? task.description;
+
+  const border = isSelected
+    ? "border-[var(--accent)] ring-1 ring-[var(--accent)]"
+    : done
+      ? "border-[var(--border)] bg-[var(--muted)]"
+      : "border-[var(--accent)] bg-[var(--card)]";
+
+  return (
+    <article
+      onClick={onSelect}
+      className={`relative rounded-2xl border p-4 cursor-pointer transition hover:border-[var(--accent)] flex flex-col gap-3 min-h-[160px] ${border}`}
+    >
+      {/* Top row: category + day */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span
+          className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full capitalize ${CATEGORY_STYLES[task.category]}`}
+        >
+          {task.category}
+        </span>
+        <span className="text-[10px] text-[var(--muted-foreground)]">
+          Day {task.dayOffset + 1}
+        </span>
+      </div>
+
+      {/* Title */}
+      <h3
+        className={`font-medium text-base leading-snug ${
+          done ? "line-through text-[var(--muted-foreground)]" : ""
+        }`}
+      >
+        {displayTitle}
+      </h3>
+
+      {/* Description, line-clamped */}
+      {displayDescription && !done && (
+        <p className="text-xs text-[var(--muted-foreground)] leading-relaxed line-clamp-2">
+          {displayDescription}
+        </p>
+      )}
+
+      {/* Mark done row, anchored to the bottom of the card */}
+      <form
+        action={toggleTaskAction}
+        onClick={(e) => e.stopPropagation()}
+        className="mt-auto pt-3 border-t border-[var(--border)] flex items-center gap-2"
+      >
+        <input type="hidden" name="taskId" value={task.id} />
+        <input type="hidden" name="nextStatus" value={nextStatus} />
+        <button
+          type="submit"
+          aria-label={done ? "Mark as not done" : "Mark as done"}
+          className={`h-7 w-7 rounded-full border-2 flex items-center justify-center transition flex-shrink-0 ${
+            done
+              ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
+              : "border-[var(--border)] hover:border-[var(--accent)]"
+          }`}
+        >
+          {done && (
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              <path
+                fillRule="evenodd"
+                d="M16.704 5.29a1 1 0 010 1.42l-7.5 7.5a1 1 0 01-1.42 0l-3.5-3.5a1 1 0 011.42-1.42L8.5 12.085l6.79-6.795a1 1 0 011.414 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+          )}
+        </button>
+        <span className="text-xs text-[var(--muted-foreground)]">
+          {done ? "Done — tap to undo" : "Mark as done"}
+        </span>
+      </form>
+    </article>
   );
 }
 

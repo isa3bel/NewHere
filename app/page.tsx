@@ -544,21 +544,21 @@ function ClosingCTA() {
         {/* Floating decorations — desktop only so mobile content stays uncrowded */}
         <div className="hidden md:block absolute inset-0 pointer-events-none">
           <FloatingPhoto
-            src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=120&h=120&fit=crop&auto=format&q=80"
+            src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&h=200&fit=crop&auto=format&q=80"
             alt="Friends laughing"
-            position="absolute left-14 lg:left-24 top-20 w-14 h-14"
+            position="absolute left-8 lg:left-16 top-16 w-24 h-24 lg:w-28 lg:h-28"
             ringColor="ring-pink-300"
           />
           <FloatingPhoto
-            src="https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?w=120&h=120&fit=crop&auto=format&q=80"
+            src="https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?w=200&h=200&fit=crop&auto=format&q=80"
             alt="Group of runners"
-            position="absolute right-14 lg:right-24 top-20 w-14 h-14"
+            position="absolute right-8 lg:right-16 top-16 w-24 h-24 lg:w-28 lg:h-28"
             ringColor="ring-purple-300"
           />
           <FloatingPhoto
-            src="https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=120&h=120&fit=crop&auto=format&q=80"
+            src="https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=200&h=200&fit=crop&auto=format&q=80"
             alt="Coffee shop"
-            position="absolute right-12 lg:right-32 bottom-16 w-14 h-14"
+            position="absolute right-8 lg:right-24 bottom-12 w-24 h-24 lg:w-28 lg:h-28"
             ringColor="ring-emerald-300"
           />
 
@@ -590,9 +590,6 @@ function ClosingCTA() {
           <p className="mt-4 text-base text-gray-600 leading-relaxed">
             Tell us where you&apos;re moving, when, and what you care about.
             We&apos;ll build your personalized plan in under a minute.
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            Free during private beta · No credit card.
           </p>
           <Link
             href="/onboarding"
