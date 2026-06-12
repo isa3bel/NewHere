@@ -4,6 +4,7 @@ import { dismissCelebrationAction } from "@/app/actions";
 
 import { AiFailureBanner } from "./AiFailureBanner";
 import { BadgeShelf } from "./BadgeShelf";
+import { CityBanner } from "./CityBanner";
 import { DailyLimitBanner } from "./DailyLimitBanner";
 
 // Vercel default function timeout is 10s on Hobby, 15s on Pro. Real
@@ -148,7 +149,11 @@ export default async function PlanPage() {
           ← Home
         </Link>
 
-        <header className="mt-6">
+        <div className="mt-6">
+          <CityBanner city={profile?.city ?? null} />
+        </div>
+
+        <header>
           <p className="text-sm font-medium uppercase tracking-widest text-[var(--accent)]">
             Your plan
           </p>

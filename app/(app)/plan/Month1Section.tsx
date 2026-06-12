@@ -229,7 +229,7 @@ export function Month1Section({
                 prompt="Pick what sounds most like you."
                 hasKeeper={false}
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {goalTiles.map((s) => {
                     const backing = taskMap[s.tile.id];
                     // Derive `completed` from live taskMap, not from
@@ -313,7 +313,7 @@ export function Month1Section({
                   prompt={cluster.prompt}
                   hasKeeper={hasKeeper}
                 >
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-start">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {clusterTasks.map((task) => (
                       <Month1Tile
                         key={task.id}
@@ -331,7 +331,7 @@ export function Month1Section({
                 prompt="Tasks added from your recommendations."
                 hasKeeper={false}
               >
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-start">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {(tasksByCategory.get("essentials") ?? []).map((task) => (
                     <Month1Tile
                       key={task.id}

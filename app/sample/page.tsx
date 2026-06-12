@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BadgeShelf } from "@/app/(app)/plan/BadgeShelf";
+import { CityBanner } from "@/app/(app)/plan/CityBanner";
 import { PlanView } from "@/app/(app)/plan/PlanView";
 import { mockBadges, mockTasks } from "@/lib/mock-data";
 import {
@@ -102,7 +103,9 @@ export default function SamplePage() {
       </div>
 
       <div className="w-full max-w-6xl px-6 py-10">
-        <header className="mt-2">
+        <CityBanner city={sampleCity} />
+
+        <header>
           <p className="text-sm font-medium uppercase tracking-widest text-[var(--accent)]">
             Sample plan
           </p>
