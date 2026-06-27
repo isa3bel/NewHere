@@ -229,7 +229,7 @@ export function Month1Section({
                 prompt="Pick what sounds most like you."
                 hasKeeper={false}
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
                   {goalTiles.map((s) => {
                     const backing = taskMap[s.tile.id];
                     // Derive `completed` from live taskMap, not from
